@@ -20,6 +20,8 @@ Cerca nel `CLAUDE.md` del progetto la sezione `## Microtask config`. Valori manc
 | `Watch dir` | `src` | Cartella codice sorgente (usata anche dall'hook) |
 | `Docs` | `README.md, CHANGELOG.md` | File documentazione da tenere allineati |
 | `Language` | `English` | Lingua output esterni (codice, README, CHANGELOG, commit) |
+| `Social drafts` | `off` | `on` → bozza di post social per ogni feature (passo IV, agent `social-writer`) |
+| `PR language` | *(assente → lingua della conversazione)* | Forza una lingua per body e commenti della PR e per la review LLM |
 
 Build o Test non trovati → chiedimeli una volta e proponi di aggiungerli al CLAUDE.md.
 
@@ -34,9 +36,13 @@ Tabella nel file `Queue`:
   - branch esistente e **non** mergiato nel branch di default → `git switch` e riusalo;
   - altrimenti → `git fetch origin` e `git switch -c <Branch> origin/<branch di default>`; se il nome esiste già (mergiato) aggiungi `-2`, `-3`…
 - Max **2 giri** review → fix per microtask, poi STOP e chiedi (vale anche quando i fix li fa l'utente, in mentoring).
-- Mai pubblicare su servizi esterni (tranne la review LLM della PR, se attiva: il diff va al provider configurato): i task `content` e le bozze Reddit (`outcomes/reddit/`) restano bozze.
+- Mai pubblicare su servizi esterni (tranne la review LLM della PR, se attiva: il diff va al provider configurato): i task `content` e le bozze social (`outcomes/social/`) restano bozze.
 - Regole del progetto in `.claude/rules/` (se esistono) valgono per tutti gli agent: passale nei prompt.
-- Report a me nella lingua della conversazione; output esterni in `Language`. Eccezione: body e commenti delle PR sono **sempre in italiano**, qualunque sia `Language` (titolo PR = prima riga del commit message, resta com'è; comandi, path, nomi di tipi/metodi e codice restano invariati).
+- Lingue. **Lingua della conversazione** = quella in cui l'utente scrive il prompt.
+  - Report a me, frasi fisse (righe dei gate, `Bozza social: …`, `⚠ CI non verificata…`) e file in `outcomes/microtask/`: lingua della conversazione. Le frasi fisse sono scritte qui in italiano: traducile mantenendo il significato.
+  - Output esterni (codice, README, CHANGELOG, commit message): `Language`.
+  - **Lingua della PR** (body, commenti, review LLM): `PR language` se configurato, altrimenti la lingua della conversazione.
+  - Titolo PR = prima riga del commit message, resta com'è; comandi, path, nomi di tipi/metodi e codice restano invariati.
 - I subagent girano in background: mentre aspetti, chiudi il turno con **una riga** (passo in corso), niente riepiloghi intermedi.
 - Marker pipeline: all'avvio `touch "$(git rev-parse --git-dir)/microtask-active"`; a ogni STOP (fine gruppo o blocco) `rm -f` dello stesso file. Col marker l'hook Stop doc-sync tace: doc-sync è già nel passo IV.
 
@@ -118,9 +124,9 @@ Copertura: ogni progetto di test del repo deve essere eseguito da `Test` (.NET: 
 ### I. Analisi → agent `microtask-pipeline:solid-analyst`
 Passa: testo microtask, baseline, config. Ricevi: piano (spiegazione semplice se fix, file, SOLID, rischio, breaking, snapshot API pubblica, test).
 **⏸ GATE 1:** se il microtask è un fix, mostra **prima** la "Spiegazione semplice" (problema → perché → come lo risolviamo), nella lingua della conversazione; poi il piano. Attendi approvazione.
-Subito sotto il piano, **sempre** (anche in `--auto` e in corsia veloce), una riga da sola, fuori da tabelle ed elenchi:
-- `Natura: feature` → `Bozza Reddit: la creo al passo IV (outcomes/reddit/<ID>.md)`
-- altrimenti → `Il task <ID> non è una feature quindi non creo il documento per il post su reddit`
+Solo con `Social drafts: on`: subito sotto il piano (anche in `--auto` e in corsia veloce), una riga da sola, fuori da tabelle ed elenchi:
+- `Natura: feature` → `Bozza social: la creo al passo IV (outcomes/social/<ID>.md)`
+- altrimenti → `Il task <ID> non è una feature quindi non creo la bozza del post social`
 In `--auto`: mostra lo stesso testo e prosegui (salvo casi STOP). Spiegazione semplice e piano servono anche al body della PR.
 
 ### II. Implementazione → agent `microtask-pipeline:implementer`
@@ -172,8 +178,8 @@ Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice scritto dall'
 
 ### IV. Memoria → agent `microtask-pipeline:memory-updater`, poi `microtask-pipeline:doc-sync-reviewer`
 Passa: config (`Queue`, `Done`, `Docs`, `Language`) + findings rimandati da trasformare in follow-up. Aggiorna coda (`[x]` + nota, oppure riga spostata in `Done`), CHANGELOG `## [Unreleased]`, `Docs`.
-Solo `code` con piano I `Natura: feature` → **in parallelo** a `memory-updater` lancia l'agent `microtask-pipeline:reddit-writer` (anche in corsia veloce). Passa: ID e testo microtask, Obiettivo e piano I, riepiloghi di implementer e test-runner, diff API di V. Scrive solo la bozza inglese `outcomes/reddit/<ID>.md`, mai pubblicata; entra nel commit del gruppo. Errore dell'agent → annotalo nel report, nessuno STOP.
-Ogni altro microtask (Natura `fix`/`altro`, o Tipo diverso da `code`) → niente agent; la riga `Il task <ID> non è una feature quindi non creo il documento per il post su reddit` è già al GATE 1 (Tipo senza passo I: scrivila qui) e torna al GATE 2.
+Solo con `Social drafts: on` e solo `code` con piano I `Natura: feature` → **in parallelo** a `memory-updater` lancia l'agent `microtask-pipeline:social-writer` (anche in corsia veloce). Passa: ID e testo microtask, Obiettivo e piano I, riepiloghi di implementer e test-runner, diff API di V. Scrive solo la bozza inglese `outcomes/social/<ID>.md`, mai pubblicata; entra nel commit del gruppo. Errore dell'agent → annotalo nel report, nessuno STOP.
+Con `Social drafts: on`, ogni altro microtask (Natura `fix`/`altro`, o Tipo diverso da `code`) → niente agent; la riga `Il task <ID> non è una feature quindi non creo la bozza del post social` è già al GATE 1 (Tipo senza passo I: scrivila qui) e torna al GATE 2. Con `off` (default) niente agent e niente righe sulle bozze social.
 Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (evita che l'hook Stop lo rilanci).
 
 ## Fine gruppo
@@ -182,7 +188,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
    - per microtask: fatto, decisioni ai gate, deviazioni dal piano;
    - findings review: risolti / rimandati;
    - task follow-up aggiunti alla coda;
-   - bozze Reddit: create (`outcomes/reddit/<ID>.md`), oppure le righe "non è una feature" del GATE 2;
+   - bozze social (solo con `Social drafts: on`): create (`outcomes/social/<ID>.md`), oppure le righe "non è una feature" del GATE 2;
    - da verificare dopo (es. CI al primo push);
    - bump suggerito;
    - in mentoring: link a `outcomes/microtask/<ID>-plan.md` per microtask;
@@ -196,20 +202,20 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
      - **Da leggere prima:** <file del perimetro del prossimo task, se noti>
      ```
      Coda vuota → `**Comando:** nessuno, coda esaurita`.
-2. **File del commit**: elenco esplicito dei file toccati dal gruppo (dai riepiloghi dei passi + coda, `Done`, CHANGELOG, Docs, report, bozze Reddit, `<ID>-plan.md` in mentoring). Confrontalo con `git status --short`: il resto va in "esclusi".
-3. **⏸ GATE 2:** mostra `git diff --stat -- <file del commit>` + i file nuovi (non compaiono nel diff), i file esclusi, link al report, bump suggerito, commit message (conventional, in `Language`). Poi, **sempre**, una riga per microtask, da sola: `Bozza Reddit: outcomes/reddit/<ID>.md` oppure `Il task <ID> non è una feature quindi non creo il documento per il post su reddit`; se nessun microtask del gruppo è una feature, anche `Il gruppo <Gruppo> non è una feature quindi non creo il documento per il post su reddit`. Il gruppo tocca CI o build (workflow, solution/progetti, props) → aggiungi `⚠ CI non verificata: controllare la prima esecuzione dopo il push`. Il report entra nel commit del gruppo. Commit solo dopo conferma, con `git add -- <file del commit>` (mai `git add -A` / `git add .`). Poi STOP.
+2. **File del commit**: elenco esplicito dei file toccati dal gruppo (dai riepiloghi dei passi + coda, `Done`, CHANGELOG, Docs, report, bozze social, `<ID>-plan.md` in mentoring). Confrontalo con `git status --short`: il resto va in "esclusi".
+3. **⏸ GATE 2:** mostra `git diff --stat -- <file del commit>` + i file nuovi (non compaiono nel diff), i file esclusi, link al report, bump suggerito, commit message (conventional, in `Language`, con il trailer `Co-Authored-By` di Claude Code: l'attribuzione AI resta visibile, non toglierlo; se manca aggiungi `Co-Authored-By: Claude <noreply@anthropic.com>`). Poi, solo con `Social drafts: on`, una riga per microtask, da sola: `Bozza social: outcomes/social/<ID>.md` oppure `Il task <ID> non è una feature quindi non creo la bozza del post social`; se nessun microtask del gruppo è una feature, anche `Il gruppo <Gruppo> non è una feature quindi non creo la bozza del post social`. Il gruppo tocca CI o build (workflow, solution/progetti, props) → aggiungi `⚠ CI non verificata: controllare la prima esecuzione dopo il push`. Il report entra nel commit del gruppo. Commit solo dopo conferma, con `git add -- <file del commit>` (mai `git add -A` / `git add .`). Poi STOP.
    In `--auto`: mostra lo stesso riepilogo, fai il commit senza attendere e passa al punto 4.
 4. **PR** (solo `--auto`):
    - Mai push su `main`/`master`: se sei lì, STOP.
    - `git push -u origin <branch>`.
-   - PR già aperta per il branch (`gh pr view --json number,url,state`) → aggiungi il body come commento (`gh pr comment`), in italiano. Altrimenti `gh pr create --base <branch di default> --title "<prima riga del commit message>" --body-file <file temporaneo>`, poi, con il numero della PR ora noto, completa i link ai file nel body e `gh pr edit <n> --body-file <file temporaneo>`.
+   - PR già aperta per il branch (`gh pr view --json number,url,state`) → aggiungi il body come commento (`gh pr comment`), nella lingua della PR. Altrimenti `gh pr create --base <branch di default> --title "<prima riga del commit message>" --body-file <file temporaneo>`, poi, con il numero della PR ora noto, completa i link ai file nel body e `gh pr edit <n> --body-file <file temporaneo>`.
    - `gh` assente/non autenticato o push rifiutato → STOP con il comando da lanciare a mano; il commit resta locale.
    - Mostra il link della PR.
-   - Review LLM (solo se scelta `Sì` all'avvio): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n>`. Pubblica un commento sulla PR. Errore (es. `PR_REVIEW_API_KEY` mancante, HTTP 429 anche dopo i tentativi, API non raggiungibile) → riporta a me in chat la riga `Review LLM fallita (...)` stampata dallo script, senza modificare il report di gruppo (che è già stato committato), nessuno STOP aggiuntivo.
+   - Review LLM (solo se scelta `Sì` all'avvio): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n> --lang "<lingua della PR>"`. Pubblica un commento sulla PR. Errore (es. `PR_REVIEW_API_KEY` mancante, HTTP 429 anche dopo i tentativi, API non raggiungibile) → riporta a me in chat la riga `Review LLM fallita (...)` stampata dallo script, senza modificare il report di gruppo (che è già stato committato), nessuno STOP aggiuntivo.
    - STOP.
 
 ### Body della PR
-Un **report** che spiega il lavoro a chi non l'ha seguito, **sempre in italiano** (indipendente da `Language`), frasi brevi; intestazioni ed etichette sono quelle italiane dell'esempio. Fonti: report di gruppo, Spiegazione semplice e piano del passo I, riepiloghi di implementer e test-runner.
+Un **report** che spiega il lavoro a chi non l'ha seguito, nella **lingua della PR** (vedi Regole; indipendente da `Language`), frasi brevi; intestazioni ed etichette sono quelle dell'esempio, tradotte nella lingua della PR. Fonti: report di gruppo, Spiegazione semplice e piano del passo I, riepiloghi di implementer e test-runner.
 
 ```markdown
 ## <Gruppo> — <titolo breve>
@@ -240,8 +246,9 @@ Un **report** che spiega il lavoro a chi non l'ha seguito, **sempre in italiano*
 
 ## Note
 - Follow-up aggiunto: <ID> — <titolo>
-- Bozza Reddit: `outcomes/reddit/<ID>.md` (solo feature)
+- Bozza social: `outcomes/social/<ID>.md` (solo feature, con `Social drafts: on`)
 - Bump suggerito: patch | minor | major (<motivo>)
+- Gate: piano (GATE 1) e diff (GATE 2) approvati dall'utente | auto-approvati in `--auto` (<motivo>)
 - ⚠ CI non verificata (solo se il gruppo tocca CI/build)
 ```
 Regole:
@@ -251,6 +258,7 @@ Regole:
 - Link ai file: il nome è un link al suo diff nella PR. `<owner>/<repo>` da `gh repo view --json nameWithOwner`; ancora = SHA-256 del percorso relativo alla root del repo, es. `printf '%s' "src/Foo/Bar.cs" | sha256sum`. Il numero `<n>` si conosce solo dopo `gh pr create`: vedi passo 4.
 - **Niente codice né diff**: sono già nel tab "Files changed". Nomi di metodi/tipi tra backtick sì.
 - "Modifiche di comportamento": ogni cambio visibile a chi usa il codice (eccezioni, valori di ritorno, config letta, API). Assenti → ometti la sezione. Presenti → il bump suggerito ne tiene conto.
+- Riga Gate: com'è andata davvero ai gate, dal report di gruppo (`GATE n: auto-approvato` → auto-approvati). Mai scrivere "approvati dall'utente" se non c'è stata la sua conferma.
 - Riga Coverage solo se `Coverage` è configurato (allora è sempre valorizzata, vedi passo 0 e III). Sezioni vuote → omettile.
 
 ## Esempi di invocazione
@@ -270,4 +278,6 @@ Regole:
 - Coverage: dotnet test src/MySolution.slnx -c Release --collect "Code Coverage;Format=cobertura" --results-directory TestResults/coverage
 - Watch dir: src
 - Docs: README.md, CHANGELOG.md, docs/
+- Social drafts: on    # opzionale: default off
+- PR language: English    # opzionale: senza, la PR segue la lingua della conversazione
 ```

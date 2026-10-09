@@ -1,9 +1,11 @@
 // plugins/microtask-pipeline/scripts/pr-review.mjs
 // Review automatica di una PR con qualunque LLM compatibile OpenAI (chat completions).
-// Uso: node pr-review.mjs <numero PR>   |   node pr-review.mjs --check
+// Uso: node pr-review.mjs <numero PR> [--lang <lingua>]   |   node pr-review.mjs --check
+// --lang: lingua della review (default English); la skill passa la lingua della PR.
 import { execFileSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { parseExclude, selectDiff } from "./diff-select.mjs";
+import { parseLanguageArg, phrasesFor } from "./review-language.mjs";
 
 // Carica .env della cartella corrente (senza dipendenze). Le variabili già impostate vincono.
 function loadDotEnv(path = ".env") {
@@ -44,7 +46,14 @@ const config = {
 };
 const label = `${config.model} @ ${new URL(config.baseUrl).host}`;
 
-const args = process.argv.slice(2);
+let language, args;
+try {
+    ({ language, rest: args } = parseLanguageArg(process.argv.slice(2)));
+} catch (error) {
+    console.error(`Errore: ${error.message}`);
+    process.exit(1);
+}
+const phrases = phrasesFor(language);
 
 if (args[0] === "--check") {
     // Usato dallo SKILL all'avvio: dice se la review è configurata, senza mai stampare la chiave.
@@ -92,7 +101,7 @@ const missingSection = missing.length
     ? `\nIl diff può essere incompleto: non segnalare come problema codice che appare troncato o file che non vedi.\n\n${missing.join("\n\n")}\n`
     : "";
 
-const prompt = `Sei un esperto revisore di codice. Analizza il seguente git diff e scrivi una Code Review sempre in lingua italiana, indipendentemente dalla lingua del diff o del progetto.
+const prompt = `Sei un esperto revisore di codice. Analizza il seguente git diff e scrivi una Code Review in questa lingua: ${language} (titoli delle sezioni inclusi), indipendentemente dalla lingua del diff, del progetto e di questo prompt.
 Rispetta esattamente questa struttura:
 
 1. **Spiegazione:** Spiegazione elementare (a prova di principiante) di cosa fa la fix o la feature.
@@ -154,17 +163,17 @@ try {
     }
 
     const codeList = (files, max = 10) =>
-        files.slice(0, max).map((f) => `\`${f}\``).join(", ") + (files.length > max ? ` e altri ${files.length - max}` : "");
+        files.slice(0, max).map((f) => `\`${f}\``).join(", ") + (files.length > max ? ` ${phrases.andMore(files.length - max)}` : "");
     const notes = [];
-    if (selection.docsOnly) notes.push("PR di sola documentazione, rivista quella");
-    if (selection.excluded.length) notes.push(`esclusi ${selection.excluded.length} file di documentazione o generati`);
-    if (selection.omitted.length) notes.push(`omessi per lunghezza ${selection.omitted.length} file: ${codeList(selection.omitted)}`);
-    if (selection.partial.length) notes.push(`inclusi solo in parte: ${codeList(selection.partial)}`);
-    if (choice.finish_reason === "length") notes.push(`risposta tagliata a ${config.maxTokens} token`);
-    const footer = notes.length ? `\n\n> ⚠️ Nota: ${notes.join("; ")}.` : "";
+    if (selection.docsOnly) notes.push(phrases.docsOnly);
+    if (selection.excluded.length) notes.push(phrases.excluded(selection.excluded.length));
+    if (selection.omitted.length) notes.push(phrases.omitted(selection.omitted.length, codeList(selection.omitted)));
+    if (selection.partial.length) notes.push(phrases.partial(codeList(selection.partial)));
+    if (choice.finish_reason === "length") notes.push(phrases.truncated(config.maxTokens));
+    const footer = notes.length ? `\n\n> ⚠️ ${phrases.note}: ${notes.join("; ")}.` : "";
 
     // Pubblica commento
-    const finalReviewText = `## 🤖 Revisione automatica (${label})\n\n${reviewText}${footer}`;
+    const finalReviewText = `## 🤖 ${phrases.title} (${label})\n\n${reviewText}${footer}`;
     execFileSync("gh", ["pr", "comment", prNumber, "-F", "-"], { input: finalReviewText, encoding: "utf-8" });
     console.log(`Review LLM pubblicata con successo (${label}).`);
 } catch (error) {
