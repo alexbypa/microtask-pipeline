@@ -9,5 +9,5 @@
   "homepage": "https://github.com/alexbypa/microtask-pipeline/tree/main/plugins/microtask-pipeline",
   "repository": "https://github.com/alexbypa/microtask-pipeline",
   "license": "MIT",
-  "keywords": ["pipeline", "multi-agent", "solid", "roslyn", "context7", "dotnet", "code-review", "todo", "reddit"]
+  "keywords": ["pipeline", "multi-agent", "solid", "roslyn", "context7", "dotnet", "code-review", "todo", "social"]
 }
