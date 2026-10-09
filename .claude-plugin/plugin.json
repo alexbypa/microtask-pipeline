@@ -6,8 +6,8 @@
     "name": "Alessandro Chiodo",
     "url": "https://github.com/alexbypa"
   },
-  "homepage": "https://github.com/alexbypa/ai-dev-arsenal/tree/main/plugins/microtask-pipeline",
-  "repository": "https://github.com/alexbypa/ai-dev-arsenal",
+  "homepage": "https://github.com/alexbypa/microtask-pipeline/tree/main/plugins/microtask-pipeline",
+  "repository": "https://github.com/alexbypa/microtask-pipeline",
   "license": "MIT",
   "keywords": ["pipeline", "multi-agent", "solid", "roslyn", "context7", "dotnet", "code-review", "todo", "reddit"]
 }

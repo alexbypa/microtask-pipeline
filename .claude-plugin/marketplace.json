@@ -1,0 +1,12 @@
+{
+  "name": "microtask-pipeline",
+  "description": "Multi-agent pipeline for Claude Code that takes each task to a verifiable outcome.",
+  "owner": { "name": "Alessandro Chiodo", "url": "https://github.com/alexbypa" },
+  "plugins": [
+    {
+      "name": "microtask-pipeline",
+      "source": "./",
+      "description": "Executes a TODO.md queue one microtask at a time: baseline, analysis, implementation, tests, independent review, docs update, grouped commits."
+    }
+  ]
+}
