@@ -25,7 +25,7 @@ Obiettivo: scrivere la sezione `## Microtask config` nel `CLAUDE.md` del progett
 | `Branch` | `outcome_yyyyMMdd-<Gruppo>` (`<Gruppo>` resta letterale: la skill lo sostituisce col gruppo eseguito) |
 | `Language` | lingua di README/CHANGELOG esistenti; default English |
 | `Social drafts` | opzionale: ometti (default `off`); `on` solo se l'utente vuole bozze di post social per le feature |
-| `PR language` | opzionale: ometti (PR, commenti e review LLM seguono la lingua della conversazione); aggiungila solo se l'utente vuole forzarne una |
+| `PR language` | opzionale: ometti (PR, commenti e review LLM seguono la lingua del testo dei task in coda); aggiungila solo se l'utente vuole forzarne una |
 
 Verifica i comandi rilevati eseguendoli **solo se** innocui e veloci (build/test); altrimenti segnala "non verificato".
 

@@ -21,7 +21,7 @@ Cerca nel `CLAUDE.md` del progetto la sezione `## Microtask config`. Valori manc
 | `Docs` | `README.md, CHANGELOG.md` | File documentazione da tenere allineati |
 | `Language` | `English` | Lingua output esterni (codice, README, CHANGELOG, commit) |
 | `Social drafts` | `off` | `on` → bozza di post social per ogni feature (passo IV, agent `social-writer`) |
-| `PR language` | *(assente → lingua della conversazione)* | Forza una lingua per body e commenti della PR e per la review LLM |
+| `PR language` | *(assente → lingua del task)* | Forza una lingua per body e commenti della PR e per la review LLM |
 
 Build o Test non trovati → chiedimeli una volta e proponi di aggiungerli al CLAUDE.md.
 
@@ -38,10 +38,12 @@ Tabella nel file `Queue`:
 - Max **2 giri** review → fix per microtask, poi STOP e chiedi (vale anche quando i fix li fa l'utente, in mentoring).
 - Mai pubblicare su servizi esterni (tranne la review LLM della PR, se attiva: il diff va al provider configurato): i task `content` e le bozze social (`outcomes/social/`) restano bozze.
 - Regole del progetto in `.claude/rules/` (se esistono) valgono per tutti gli agent: passale nei prompt.
-- Lingue. **Lingua della conversazione** = quella in cui l'utente scrive il prompt.
+- Lingue.
+  - **Lingua del task** = quella del testo della colonna Task delle righe selezionate (lingue miste → quella della maggioranza delle righe; a parità, quella della prima). Il comando di solito arriva senza altro testo: la lingua si capisce da qui, non dal prompt.
+  - **Lingua della conversazione** = quella dei messaggi che l'utente scrive a parole; finché ha lanciato solo il comando, è la lingua del task.
   - Report a me, frasi fisse (righe dei gate, `Bozza social: …`, `⚠ CI non verificata…`) e file in `outcomes/microtask/`: lingua della conversazione. Le frasi fisse sono scritte qui in italiano: traducile mantenendo il significato.
   - Output esterni (codice, README, CHANGELOG, commit message): `Language`.
-  - **Lingua della PR** (body, commenti, review LLM): `PR language` se configurato, altrimenti la lingua della conversazione.
+  - **Lingua della PR** (body, commenti, review LLM): `PR language` se configurato, altrimenti la lingua del task.
   - Titolo PR = prima riga del commit message, resta com'è; comandi, path, nomi di tipi/metodi e codice restano invariati.
 - I subagent girano in background: mentre aspetti, chiudi il turno con **una riga** (passo in corso), niente riepiloghi intermedi.
 - Marker pipeline: all'avvio `touch "$(git rev-parse --git-dir)/microtask-active"`; a ogni STOP (fine gruppo o blocco) `rm -f` dello stesso file. Col marker l'hook Stop doc-sync tace: doc-sync è già nel passo IV.
@@ -279,5 +281,5 @@ Regole:
 - Watch dir: src
 - Docs: README.md, CHANGELOG.md, docs/
 - Social drafts: on    # opzionale: default off
-- PR language: English    # opzionale: senza, la PR segue la lingua della conversazione
+- PR language: English    # opzionale: senza, la PR segue la lingua del testo dei task
 ```
