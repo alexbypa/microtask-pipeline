@@ -1,0 +1,26 @@
+{
+  "description": "microtask-pipeline: remind to run init when not configured; require doc-sync-reviewer when source files changed since last doc check",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/config-check.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

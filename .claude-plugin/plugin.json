@@ -1,0 +1,13 @@
+{
+  "name": "microtask-pipeline",
+  "version": "1.19.0",
+  "description": "Multi-agent pipeline that executes a TODO.md queue one microtask at a time: baseline, SOLID analysis, implementation, tests, independent review, docs update, grouped commits.",
+  "author": {
+    "name": "Alessandro Chiodo",
+    "url": "https://github.com/alexbypa"
+  },
+  "homepage": "https://github.com/alexbypa/ai-dev-arsenal/tree/main/plugins/microtask-pipeline",
+  "repository": "https://github.com/alexbypa/ai-dev-arsenal",
+  "license": "MIT",
+  "keywords": ["pipeline", "multi-agent", "solid", "roslyn", "context7", "dotnet", "code-review", "todo", "reddit"]
+}
