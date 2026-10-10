@@ -1,14 +1,14 @@
 // plugins/microtask-pipeline/scripts/review-language.mjs
-// Lingua della review LLM: argomento --lang e frasi fisse del commento (italiano o inglese, fallback inglese).
+// LLM review language: --lang argument and fixed comment phrases (Italian or English, English fallback).
 
 export const DEFAULT_LANGUAGE = "English";
 
-// Estrae --lang <lingua> dagli argomenti; restituisce la lingua e gli argomenti rimanenti.
+// Extracts --lang <language> from the arguments; returns the language and the remaining arguments.
 export function parseLanguageArg(args) {
     const index = args.indexOf("--lang");
     if (index === -1) return { language: DEFAULT_LANGUAGE, rest: args };
     const value = args[index + 1]?.trim();
-    if (!value || value.startsWith("--")) throw new Error("--lang richiede una lingua (es. --lang Italiano).");
+    if (!value || value.startsWith("--")) throw new Error("--lang requires a language (e.g. --lang Italian).");
     return { language: value, rest: args.filter((_, i) => i !== index && i !== index + 1) };
 }
 
@@ -35,7 +35,7 @@ const PHRASES = {
     },
 };
 
-// Frasi fisse per la lingua richiesta: italiano ("Italiano", "Italian", "it", "it-IT"), altrimenti inglese.
+// Fixed phrases for the requested language: Italian ("Italiano", "Italian", "it", "it-IT"), otherwise English.
 export function phrasesFor(language) {
     return /^it(alian[oa]?|-[a-z]{2})?$/i.test(language.trim()) ? PHRASES.it : PHRASES.en;
 }

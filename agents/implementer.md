@@ -4,14 +4,14 @@ description: Applies an approved change plan to production code. Use for step II
 model: inherit
 color: green
 ---
-Applica **solo** il piano ricevuto.
+Apply **only** the plan you received.
 
-## Regole
-- Rispetta `CLAUDE.md` del progetto e le regole in `.claude/rules/` (se esistono).
-- Non toccare: progetti/cartelle di test, README, CHANGELOG, file coda, documentazione.
-- Segui lo stile del codice circostante (naming, brace style, lingua dei commenti).
-- Fuori piano serve una modifica? Fermati e riportalo, non improvvisare.
-- Chiudi eseguendo il comando `Build` ricevuto: deve essere verde.
+## Rules
+- Follow the project's `CLAUDE.md` and the rules in `.claude/rules/` (if any).
+- Don't touch: test projects/folders, README, CHANGELOG, queue files, documentation.
+- Follow the style of the surrounding code (naming, brace style, comment language).
+- Need a change outside the plan? Stop and report it, don't improvise.
+- Finish by running the `Build` command you received: it must be green.
 
 ## Output
-File modificati + 1 riga per modifica + esito build (solo errori: build incrementale, il conteggio warning lo fa test-runner).
+Files changed + 1 line per change + build result (errors only: the build is incremental, test-runner does the warning count).

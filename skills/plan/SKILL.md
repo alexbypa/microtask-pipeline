@@ -1,61 +1,61 @@
 ---
 name: plan
-description: "Trasforma un documento di roadmap in righe della coda microtask (Queue in CLAUDE.md): propone gruppi, ID, tipi e task con riferimento alla sezione, attende approvazione, poi le aggiunge in fondo alla coda."
+description: "Turns a roadmap document into microtask queue rows (Queue in CLAUDE.md): proposes groups, IDs, types and tasks with a reference to the source section, waits for approval, then appends them to the queue."
 disable-model-invocation: true
-argument-hint: "<file roadmap> [--prefix R]"
+argument-hint: "<roadmap file> [--prefix R]"
 ---
-# Roadmap → coda microtask
+# Roadmap → microtask queue
 
-Questa skill **scrive solo la coda**: non esegue nessun task (quello lo fa `/microtask-pipeline:microtask`) e non tocca codice.
+This skill **only writes the queue**: it runs no task (that is `/microtask-pipeline:microtask`'s job) and touches no code.
 
-## Argomenti
-- `<file roadmap>` (obbligatorio): un markdown qualsiasi (piano, spec, elenco puntato). Assente o non leggibile → dillo e fermati.
-- `--prefix <lettera>` (opzionale): lettera degli ID, es. `R` → task `R0`, `R1`… e gruppi `RG0`, `RG1`…. Assente → prima lettera maiuscola non usata come iniziale di nessun ID in `Queue` e `Done`; gruppi `G<n>` dal primo numero libero.
+## Arguments
+- `<roadmap file>` (required): any markdown file (plan, spec, bullet list). Missing or unreadable → say so and stop.
+- `--prefix <letter>` (optional): letter for the IDs, e.g. `R` → tasks `R0`, `R1`… and groups `RG0`, `RG1`…. Missing → the first uppercase letter not used as the initial of any ID in `Queue` and `Done`; groups `G<n>` from the first free number.
 
 ## 1. Config
-Leggi `## Microtask config` nel `CLAUDE.md` del progetto (`Queue`, default `TODO.md`; `Done`, opzionale). Sezione assente → STOP: "lancia prima `/microtask-pipeline:init`".
+Read `## Microtask config` in the project's `CLAUDE.md` (`Queue`, default `TODO.md`; `Done`, optional). Section missing → STOP: "run `/microtask-pipeline:init` first".
 
-## 2. ID e gruppi esistenti
-Raccogli tutti gli ID (colonna ID) e i gruppi (colonna Group) già presenti in `Queue` **e** `Done`. I nuovi non devono sovrapporsi né tra loro né con quelli esistenti, e **nessun ID nuovo può coincidere con un nome di gruppo** (la pipeline cerca l'argomento in entrambe le colonne). `--prefix` già usato → continua la numerazione dal più alto esistente con quella lettera.
+## 2. Existing IDs and groups
+Collect every ID (ID column) and group (Group column) already in `Queue` **and** `Done`. New ones must not overlap with each other or with existing ones, and **no new ID may equal a group name** (the pipeline looks up its argument in both columns). `--prefix` already in use → continue numbering from the highest existing one with that letter.
 
-## 3. Lettura
-Leggi **solo** il file roadmap, una volta. Niente codice, niente altri documenti, salvo un link esplicito del documento che serve a capire il perimetro di un task.
+## 3. Reading
+Read **only** the roadmap file, once. No code, no other documents, except a link in the document that is needed to understand a task's scope.
 
-## 4. Scomposizione
-- **Un gruppo per incremento o fase** del documento (un gruppo = un commit della pipeline). Documento senza fasi → gruppi da 3-6 task affini.
-- **Un microtask per contratto o layer**: mai due progetti nello stesso task, mai due repository.
-- **Tipo**: `analysis` per decisioni o punti aperti, `code` per codice e test, `docs` per documentazione, `content` per bozze.
-- **Decisioni aperte prima**: se il documento ha punti aperti o domande, il primo gruppo è un task `analysis` che li chiude.
-- **Task**: una riga, verbo all'imperativo, poi il riferimento alla sezione: `→ <percorso del file>#<slug dell'heading>`. Così la pipeline, eseguendo il task, legge solo quella sezione. Slug in stile GitHub (minuscolo, spazi → `-`, punteggiatura rimossa).
-- **Ordine**: quello del documento (la pipeline prende il primo `[ ]` dall'alto). Dipendenza esplicita che lo contraddice → segui la dipendenza e annotalo.
-- Lingua dei task: quella della conversazione.
+## 4. Breakdown
+- **One group per increment or phase** of the document (one group = one pipeline commit). Document without phases → groups of 3-6 related tasks.
+- **One microtask per contract or layer**: never two projects in the same task, never two repositories.
+- **Type**: `analysis` for decisions or open points, `code` for code and tests, `docs` for documentation, `content` for drafts.
+- **Open decisions first**: if the document has open points or questions, the first group is an `analysis` task that settles them.
+- **Task**: one line, imperative verb, then the section reference: `→ <file path>#<heading slug>`. This way the pipeline, when running the task, reads only that section. GitHub-style slug (lowercase, spaces → `-`, punctuation removed).
+- **Order**: the document's order (the pipeline takes the first `[ ]` from the top). An explicit dependency that contradicts it → follow the dependency and note it.
+- Task language: the conversation's language.
 
-## 5. Segnalazioni (prima della tabella)
-- **Troppo grandi**: task che toccano più layer o progetti, con la divisione proposta (già applicata in tabella).
-- **Altro repository**: task che appartengono a un repo diverso da quello corrente. **Non** vanno in tabella: elencali con il suggerimento di lanciare `plan` in quel repo.
-- **Non convertiti**: parti del documento che non sono diventate task (contesto, decisioni già prese, punti fuori scope), una riga ciascuna, così si vede che non è sparito niente.
+## 5. Notes (before the table)
+- **Too big**: tasks that touch several layers or projects, with the proposed split (already applied in the table).
+- **Other repository**: tasks that belong to a repo other than the current one. They do **not** go in the table: list them with the suggestion to run `plan` in that repo.
+- **Not converted**: parts of the document that did not become tasks (context, decisions already made, out-of-scope points), one line each, so it is clear nothing went missing.
 
 ## 6. ⏸ GATE
-Mostra, nella lingua della conversazione:
-1. le segnalazioni;
-2. la tabella proposta, nel formato della coda:
+Show, in the conversation's language:
+1. the notes;
+2. the proposed table, in the queue format:
    ```markdown
    | Status | ID | Group | Type | Task |
    |---|---|---|---|---|
-   | [ ] | R0 | RG0 | analysis | Decidere i punti aperti in un ADR → docs/plan.md#punti-aperti |
+   | [ ] | R0 | RG0 | analysis | Decide the open points in an ADR → docs/plan.md#open-points |
    ```
-3. il riepilogo: numero di gruppi, task per tipo, file coda di destinazione.
+3. the summary: number of groups, tasks per type, target queue file.
 
-Poi **una sola** `AskUserQuestion`: "Aggiungo questi task a `<Queue>`?" → `Aggiungi` / `Modifica` / `Annulla`.
-- `Modifica` → chiedi cosa cambiare, applica, ripresenta tabella e domanda.
-- `Annulla` → STOP, nessuna scrittura.
+Then **a single** `AskUserQuestion`: "Add these tasks to `<Queue>`?" → `Add` / `Edit` / `Cancel`.
+- `Edit` → ask what to change, apply it, show the table and the question again.
+- `Cancel` → STOP, nothing written.
 
-## 7. Scrittura
-Solo dopo `Aggiungi`:
-- righe **in fondo** alla tabella coda esistente, con Edit (mai riscrivere il file, mai riordinare righe esistenti);
-- tabella assente → creala in fondo al file sotto `## Microtask queue` con l'intestazione `| Status | ID | Group | Type | Task |`; tabella esistente con intestazioni in un'altra lingua → tienile;
-- file `Queue` assente → crealo con quella sola sezione.
-Rileggi il file e verifica che le righe preesistenti siano invariate.
+## 7. Writing
+Only after `Add`:
+- rows **at the end** of the existing queue table, with Edit (never rewrite the file, never reorder existing rows);
+- no table → create it at the end of the file under `## Microtask queue` with the header `| Status | ID | Group | Type | Task |`; existing table with headers in another language → keep them;
+- `Queue` file missing → create it with that section only.
+Re-read the file and check that the pre-existing rows are unchanged.
 
-## 8. Chiusura
-Una riga con il comando per partire: `/microtask-pipeline:microtask <primo gruppo aggiunto> --manual`. Nessun commit: la coda entra nel commit del primo gruppo eseguito.
+## 8. Wrap-up
+One line with the command to start: `/microtask-pipeline:microtask <first added group> --manual`. No commit: the queue goes into the commit of the first group that runs.

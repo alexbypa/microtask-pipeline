@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# SessionStart hook (microtask-pipeline): se il progetto non ha "## Microtask config"
-# nel CLAUDE.md, chiede a Claude di suggerire /microtask-pipeline:init. Altrimenti silenzio.
-cat >/dev/null   # consuma l'input dell'hook (non serve)
+# SessionStart hook (microtask-pipeline): if the project has no "## Microtask config"
+# in CLAUDE.md, asks Claude to suggest /microtask-pipeline:init. Otherwise silent.
+cat >/dev/null   # consume the hook input (not needed)
 
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
-# Nuova sessione (o /clear) = nessuna pipeline /microtask in corso: togli il cartello
-# lasciato da una pipeline interrotta, così l'hook Stop doc-sync torna attivo.
-cartella_git=$(git rev-parse --git-dir 2>/dev/null)
-if [ -n "$cartella_git" ]; then
-  rm -f "$cartella_git/microtask-active"
+# New session (or /clear) = no /microtask pipeline in progress: remove the marker
+# left by an interrupted pipeline, so the doc-sync Stop hook becomes active again.
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ -n "$git_dir" ]; then
+  rm -f "$git_dir/microtask-active"
 fi
 
 for f in CLAUDE.md .claude/CLAUDE.md; do

@@ -4,35 +4,35 @@ description: Writes or updates tests for a change and runs them, with changed-li
 model: sonnet
 color: yellow
 ---
-Scrivi/aggiorna test **solo** nei progetti/cartelle di test esistenti.
+Write/update tests **only** in existing test projects/folders.
 
-## Regole
-- Rispetta `CLAUDE.md` del progetto e le regole in `.claude/rules/` (se esistono).
-- Segui framework e convenzioni dei test già presenti (naming, pattern Arrange-Act-Assert, mocking).
-- Copri i casi indicati nel piano + almeno un caso limite.
-- Prima dei test esegui `Build` **completa** (non incrementale: .NET `--no-incremental`) e conta i warning.
-- Esegui il comando `Test` ricevuto; se ricevi anche `Coverage`, esegui **solo** `Coverage` (lancia gli stessi test).
-- Test fallisce per bug nel codice di produzione → **non** correggerlo: riportalo.
-- Nessun progetto di test esistente → fermati e chiedi dove crearlo.
+## Rules
+- Follow the project's `CLAUDE.md` and the rules in `.claude/rules/` (if any).
+- Follow the framework and conventions of the existing tests (naming, Arrange-Act-Assert pattern, mocking).
+- Cover the cases listed in the plan + at least one edge case.
+- Before the tests run a **full** `Build` (not incremental: .NET `--no-incremental`) and count the warnings.
+- Run the `Test` command you received; if you also receive `Coverage`, run **only** `Coverage` (it runs the same tests).
+- A test fails because of a bug in production code → **don't** fix it: report it.
+- No existing test project → stop and ask where to create it.
 
-## Coverage (solo se ricevi `Coverage`)
-1. Svuota prima le cartelle dei risultati, così leggi solo i report di questo run. Un `--results-directory` relativo può finire nella root o **per progetto di test** (dipende da SDK e cwd): cerca i report con `**/<results-directory>/**/*.cobertura.xml`. Verifica che ogni progetto di test compaia (come `<package>` o come report): se ne manca uno, riportalo.
-2. Righe modificate: `git diff -U0 HEAD -- <file di produzione del microtask>` (esclusi test, file generati, docs).
-3. Nei Cobertura XML (`<class filename=...>` → `<line number=... hits=...>`) una riga è coperta se `hits > 0` in almeno un report (più progetti/TFM → unisci). Righe non eseguibili (assenti dall'XML) non contano.
-4. Righe modificate con `hits=0` → scrivi un test che le copra. Se non è ragionevole (es. catch di I/O, guard difensivo irraggiungibile) lasciale scoperte con motivazione.
-5. Riporta anche la line coverage globale **di produzione**: righe con `hits>0` / righe totali, sommando solo i `<package>` di produzione. Escludi i package di test (nome con `Test`/`Tests`, o sorgenti nelle cartelle di test), di esempio/benchmark e le **librerie di terzi** (`filename` fuori dal repo, es. dipendenze con sorgenti embedded): il `line-rate` della radice li include e falsa il dato. Se il progetto ha uno script di riepilogo (es. indicato nel `CLAUDE.md`), usalo. Stesso file in più report → contalo una volta (coperto se coperto in almeno uno).
+## Coverage (only if you receive `Coverage`)
+1. Empty the results folders first, so you read only this run's reports. A relative `--results-directory` may end up in the root or **per test project** (depends on SDK and cwd): search for reports with `**/<results-directory>/**/*.cobertura.xml`. Check that every test project appears (as a `<package>` or as a report): if one is missing, report it.
+2. Changed lines: `git diff -U0 HEAD -- <microtask production files>` (excluding tests, generated files, docs).
+3. In the Cobertura XML (`<class filename=...>` → `<line number=... hits=...>`) a line is covered if `hits > 0` in at least one report (several projects/TFMs → merge them). Non-executable lines (absent from the XML) don't count.
+4. Changed lines with `hits=0` → write a test that covers them. If that isn't reasonable (e.g. I/O catch, unreachable defensive guard) leave them uncovered with a justification.
+5. Also report the global **production** line coverage: lines with `hits>0` / total lines, summing only the production `<package>` elements. Exclude test packages (name containing `Test`/`Tests`, or sources in test folders), sample/benchmark packages and **third-party libraries** (`filename` outside the repo, e.g. dependencies with embedded sources): the root `line-rate` includes them and skews the figure. If the project has a summary script (e.g. named in `CLAUDE.md`), use it. Same file in several reports → count it once (covered if covered in at least one).
 
 ## Output
-Test aggiunti/modificati, esito (passati/falliti), warning vs baseline (nuovi warning con file:riga), eventuali bug trovati.
-Con `Coverage`, due tabelle (mai XML grezzo):
+Tests added/changed, result (passed/failed), warnings vs baseline (new warnings with file:line), any bugs found.
+With `Coverage`, two tables (never raw XML):
 
-| Coverage produzione | Baseline | Ora |
+| Production coverage | Baseline | Now |
 |---|---:|---:|
-| Righe coperte | N/M (x%) | N/M (y%) |
+| Lines covered | N/M (x%) | N/M (y%) |
 
-| File modificato | Righe modificate coperte | Scoperte (range) | Motivo |
+| File changed | Changed lines covered | Uncovered (range) | Reason |
 |---|---:|---|---|
-| `src/.../Foo.cs` | 12/14 | 40-41 | catch I/O non riproducibile |
+| `src/.../Foo.cs` | 12/14 | 40-41 | I/O catch not reproducible |
 
-Righe scoperte senza motivo accettabile = finding 🟡.
-Coverage globale di produzione **sotto la baseline** = finding 🟡 (indica i file che l'hanno fatta scendere). Nessun report Cobertura prodotto → non chiudere con "non misurata": riporta l'errore del comando.
+Uncovered lines without an acceptable reason = 🟡 finding.
+Global production coverage **below the baseline** = 🟡 finding (name the files that brought it down). No Cobertura report produced → don't close with "not measured": report the command's error.

@@ -1,13 +1,13 @@
 // plugins/microtask-pipeline/scripts/pr-review.mjs
-// Review automatica di una PR con qualunque LLM compatibile OpenAI (chat completions).
-// Uso: node pr-review.mjs <numero PR> [--lang <lingua>]   |   node pr-review.mjs --check
-// --lang: lingua della review (default English); la skill passa la lingua della PR.
+// Automated review of a PR with any OpenAI-compatible LLM (chat completions).
+// Usage: node pr-review.mjs <PR number> [--lang <language>]   |   node pr-review.mjs --check
+// --lang: review language (default English); the skill passes the PR language.
 import { execFileSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { parseExclude, selectDiff } from "./diff-select.mjs";
 import { parseLanguageArg, phrasesFor } from "./review-language.mjs";
 
-// Carica .env della cartella corrente (senza dipendenze). Le variabili già impostate vincono.
+// Loads .env from the current folder (no dependencies). Variables already set take precedence.
 function loadDotEnv(path = ".env") {
     if (!existsSync(path)) return;
     for (const raw of readFileSync(path, "utf-8").split(/\r?\n/)) {
@@ -23,12 +23,12 @@ function loadDotEnv(path = ".env") {
 
 loadDotEnv();
 
-// Intero positivo dall'ambiente; se manca o è vuoto usa il default, se non è valido avvisa su stdout.
+// Positive integer from the environment; if missing or empty uses the default, if invalid warns on stdout.
 function positiveIntEnv(name, fallback) {
     const raw = process.env[name]?.trim();
     if (!raw) return fallback;
     if (/^\d+$/.test(raw) && Number(raw) > 0) return Number(raw);
-    console.log(`Avviso: ${name}="${raw}" non è un intero positivo, uso il default ${fallback}.`);
+    console.log(`Warning: ${name}="${raw}" is not a positive integer, using the default ${fallback}.`);
     return fallback;
 }
 
@@ -36,11 +36,11 @@ const config = {
     apiKey: process.env.PR_REVIEW_API_KEY,
     baseUrl: (process.env.PR_REVIEW_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, ""),
     model: process.env.PR_REVIEW_MODEL || "openai/gpt-oss-120b",
-    // Default pensati per il piano gratuito di Groq (8K token al minuto su openai/gpt-oss-120b).
+    // Defaults designed for Groq's free tier (8K tokens per minute on openai/gpt-oss-120b).
     maxChars: Number(process.env.PR_REVIEW_MAX_CHARS) || 16000,
-    // Limite di token della risposta (max_tokens): 2048 troncava le review a metà frase.
+    // Response token limit (max_tokens): 2048 truncated reviews mid-sentence.
     maxTokens: positiveIntEnv("PR_REVIEW_MAX_TOKENS", 4096),
-    // Facoltativo: non tutti i provider compatibili OpenAI accettano reasoning_effort.
+    // Optional: not all OpenAI-compatible providers accept reasoning_effort.
     reasoningEffort: process.env.PR_REVIEW_REASONING_EFFORT?.trim() || undefined,
     exclude: parseExclude(process.env.PR_REVIEW_EXCLUDE),
 };
@@ -50,65 +50,65 @@ let language, args;
 try {
     ({ language, rest: args } = parseLanguageArg(process.argv.slice(2)));
 } catch (error) {
-    console.error(`Errore: ${error.message}`);
+    console.error(`Error: ${error.message}`);
     process.exit(1);
 }
 const phrases = phrasesFor(language);
 
 if (args[0] === "--check") {
-    // Usato dallo SKILL all'avvio: dice se la review è configurata, senza mai stampare la chiave.
+    // Used by the SKILL at startup: tells whether the review is configured, without ever printing the key.
     if (config.apiKey) {
-        console.log(`Review LLM configurata: ${label} (max ${config.maxTokens} token)`);
+        console.log(`LLM review configured: ${label} (max ${config.maxTokens} tokens)`);
         process.exit(0);
     }
-    console.log("Review LLM non configurata: PR_REVIEW_API_KEY mancante (ambiente o .env).");
+    console.log("LLM review not configured: PR_REVIEW_API_KEY missing (environment or .env).");
     process.exit(2);
 }
 
 const prNumber = args[0];
-// Prevenzione Command Injection e validazione argomenti
+// Command injection prevention and argument validation
 if (!prNumber || !/^\d+$/.test(prNumber)) {
-    console.error("Errore: fornire un numero di PR valido (solo cifre).");
+    console.error("Error: provide a valid PR number (digits only).");
     process.exit(1);
 }
 
 function fail(message) {
-    console.error(`Review LLM fallita (${label}): ${message}`);
+    console.error(`LLM review failed (${label}): ${message}`);
     process.exit(1);
 }
 
-if (!config.apiKey) fail("PR_REVIEW_API_KEY mancante (ambiente o .env).");
+if (!config.apiKey) fail("PR_REVIEW_API_KEY missing (environment or .env).");
 
 let diff;
 try {
-    // execFileSync con array protegge dall'iniezione
+    // execFileSync with an array protects against injection
     diff = execFileSync("gh", ["pr", "diff", prNumber], { encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 });
 } catch (error) {
     fail(`gh pr diff: ${error.message}`);
 }
 
-// Codice prima, test in fondo, documentazione fuori; taglio a confine di file (limite di token del provider)
+// Code first, tests last, documentation out; cut at file boundaries (provider token limit)
 const selection = selectDiff(diff, { maxChars: config.maxChars, exclude: config.exclude });
 
 const listFiles = (files, max = 30) =>
-    files.slice(0, max).map((f) => `- ${f}`).join("\n") + (files.length > max ? `\n- ... e altri ${files.length - max}` : "");
+    files.slice(0, max).map((f) => `- ${f}`).join("\n") + (files.length > max ? `\n- ... and ${files.length - max} more` : "");
 
 const missing = [];
-if (selection.excluded.length) missing.push(`File esclusi (documentazione o generati):\n${listFiles(selection.excluded)}`);
-if (selection.omitted.length) missing.push(`File omessi per limite di lunghezza:\n${listFiles(selection.omitted)}`);
-if (selection.partial.length) missing.push(`File inclusi solo in parte (blocchi @@ interi):\n${listFiles(selection.partial)}`);
+if (selection.excluded.length) missing.push(`Excluded files (documentation or generated):\n${listFiles(selection.excluded)}`);
+if (selection.omitted.length) missing.push(`Files omitted due to length limit:\n${listFiles(selection.omitted)}`);
+if (selection.partial.length) missing.push(`Files only partially included (whole @@ blocks):\n${listFiles(selection.partial)}`);
 const missingSection = missing.length
-    ? `\nIl diff può essere incompleto: non segnalare come problema codice che appare troncato o file che non vedi.\n\n${missing.join("\n\n")}\n`
+    ? `\nThe diff may be incomplete: do not report as an issue code that appears truncated or files you cannot see.\n\n${missing.join("\n\n")}\n`
     : "";
 
-const prompt = `Sei un esperto revisore di codice. Analizza il seguente git diff e scrivi una Code Review in questa lingua: ${language} (titoli delle sezioni inclusi), indipendentemente dalla lingua del diff, del progetto e di questo prompt.
-Rispetta esattamente questa struttura:
+const prompt = `You are an expert code reviewer. Analyze the following git diff and write a Code Review in this language: ${language} (section titles included), regardless of the language of the diff, of the project and of this prompt.
+Follow exactly this structure:
 
-1. **Spiegazione:** Spiegazione elementare (a prova di principiante) di cosa fa la fix o la feature.
-2. **Rischi e Problemi:** Evidenziazione di eventuali problemi, rischi o edge cases.
-3. **Correzioni suggerite:** Eventuale codice di correzione formattato in Markdown, se necessario (altrimenti indica che non ci sono correzioni).
+1. **Explanation:** Elementary (beginner-proof) explanation of what the fix or feature does.
+2. **Risks and Issues:** Highlight any issues, risks or edge cases.
+3. **Suggested fixes:** Any fix code formatted in Markdown, if needed (otherwise state that there are no fixes).
 ${missingSection}
-Ecco il diff:
+Here is the diff:
 \`\`\`diff
 ${selection.text}
 \`\`\`
@@ -140,7 +140,7 @@ async function callLlm() {
         if (response.status === 429 && attempt < MAX_RETRIES) {
             const retryAfter = Number(response.headers.get("retry-after"));
             const waitSeconds = Math.min(retryAfter > 0 ? retryAfter : 10 * (attempt + 1), MAX_WAIT_SECONDS);
-            console.error(`Review LLM (${label}): HTTP 429, nuovo tentativo ${attempt + 1}/${MAX_RETRIES} tra ${waitSeconds}s.`);
+            console.error(`LLM review (${label}): HTTP 429, retrying ${attempt + 1}/${MAX_RETRIES} in ${waitSeconds}s.`);
             await sleep(waitSeconds * 1000);
             continue;
         }
@@ -152,14 +152,14 @@ try {
     const data = await callLlm();
     const choice = data.choices?.[0];
     const reviewText = choice?.message?.content;
-    if (!reviewText) fail("risposta vuota o malformata.");
+    if (!reviewText) fail("empty or malformed response.");
 
-    // Token reali consumati: servono a tarare PR_REVIEW_MAX_CHARS.
+    // Actual tokens consumed: used to tune PR_REVIEW_MAX_CHARS.
     const usage = data.usage;
     if (usage) {
         const reasoning = usage.completion_tokens_details?.reasoning_tokens;
-        console.log(`Token: ${usage.prompt_tokens} inviati (${prompt.length} caratteri), ${usage.completion_tokens} risposta` +
-            (reasoning ? ` di cui ${reasoning} di ragionamento` : "") + ".");
+        console.log(`Token: ${usage.prompt_tokens} sent (${prompt.length} characters), ${usage.completion_tokens} response` +
+            (reasoning ? ` of which ${reasoning} reasoning` : "") + ".");
     }
 
     const codeList = (files, max = 10) =>
@@ -172,10 +172,10 @@ try {
     if (choice.finish_reason === "length") notes.push(phrases.truncated(config.maxTokens));
     const footer = notes.length ? `\n\n> ⚠️ ${phrases.note}: ${notes.join("; ")}.` : "";
 
-    // Pubblica commento
+    // Post comment
     const finalReviewText = `## 🤖 ${phrases.title} (${label})\n\n${reviewText}${footer}`;
     execFileSync("gh", ["pr", "comment", prNumber, "-F", "-"], { input: finalReviewText, encoding: "utf-8" });
-    console.log(`Review LLM pubblicata con successo (${label}).`);
+    console.log(`LLM review posted successfully (${label}).`);
 } catch (error) {
-    fail(`errore imprevisto: ${error.message}`);
+    fail(`unexpected error: ${error.message}`);
 }
