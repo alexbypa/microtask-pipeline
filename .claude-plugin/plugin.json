@@ -1,6 +1,6 @@
 {
   "name": "microtask-pipeline",
-  "version": "1.21.0",
+  "version": "1.21.1",
   "description": "Multi-agent pipeline that executes a TODO.md queue one microtask at a time: baseline, SOLID analysis, implementation, tests, independent review, docs update, grouped commits.",
   "author": {
     "name": "Alessandro Chiodo",
