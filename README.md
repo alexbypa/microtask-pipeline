@@ -179,6 +179,7 @@ Settings come from the environment or the project `.env` (environment wins; keep
 | `PR_REVIEW_MODEL` | `openai/gpt-oss-120b` | Model id |
 | `PR_REVIEW_MAX_CHARS` | `16000` | Diff budget (fits the Groq free tier). Production code goes first, then config, then tests; docs and generated files are skipped |
 | `PR_REVIEW_MAX_TOKENS` | `4096` | Max tokens of the answer |
+| `PR_REVIEW_FALLBACK_MODEL` | *(none)* | Optional backup model on the same provider, tried when the main one still fails with HTTP 429 or 5xx after the retries |
 | `PR_REVIEW_REASONING_EFFORT` | *(none)* | Optional `reasoning_effort`, for providers that support it |
 | `PR_REVIEW_EXCLUDE` | *(none)* | Comma-separated patterns to leave out of the diff; `!pattern` re-includes a default one (e.g. `!*.md`) |
 
@@ -199,11 +200,16 @@ PR_REVIEW_MODEL=gemini-3.6-flash
 PR_REVIEW_MAX_CHARS=60000
 ```
 
-If a model keeps answering HTTP 503 (`UNAVAILABLE`), the provider is overloaded, typically right after a new model ships: switch `PR_REVIEW_MODEL` to the previous stable model of the same family.
+HTTP 429 and 5xx errors (e.g. Gemini's 503 `UNAVAILABLE` "high demand") are transient: the script retries twice (waiting for `Retry-After` if the provider sends it, otherwise 10s then 20s). If the model still fails and `PR_REVIEW_FALLBACK_MODEL` is set, it runs the review on that model instead and the comment header shows which model actually answered. Pick a fallback that is not the same family tier, for example:
+
+```dotenv
+PR_REVIEW_MODEL=gemini-3.8-flash
+PR_REVIEW_FALLBACK_MODEL=gemini-3.5-flash-lite
+```
 
 ### Try it in Postman before a real run
 
-[`scripts/postman/pr-review.postman_collection.json`](scripts/postman/pr-review.postman_collection.json) replays the review of a real PR without posting anything, so you can compare providers and models side by side. Import it, then fill the collection variables `apiKey`, `baseUrl`, `model`, `owner`, `repo`, `prNumber` (and `githubToken` for private repos or GitHub rate limits). Its pre-request script downloads the PR diff from the GitHub API, skips docs and generated files, cuts at `maxChars` on file boundaries and builds the same prompt as `pr-review.mjs`; the review appears in the **Visualize** tab and token usage in the Console. The diff selection is a simplified version of the plugin's (no code-before-tests ordering, no partial files). A `List models` request shows which models your key can use.
+[`scripts/postman/pr-review.postman_collection.json`](scripts/postman/pr-review.postman_collection.json) replays the review of a real PR without posting anything, so you can compare providers and models side by side. Import it, then fill the collection variables `apiKey`, `baseUrl`, `model`, `owner`, `repo`, `prNumber` (and `githubToken` for private repos or GitHub rate limits). Its pre-request script downloads the PR diff from the GitHub API, skips docs and generated files, cuts at `maxChars` on file boundaries and builds the same prompt as `pr-review.mjs`; the review appears in the **Visualize** tab and token usage in the Console. The diff selection is a simplified version of the plugin's (no code-before-tests ordering, no partial files). Postman cannot run `gh`, so private repos need a GitHub token in `githubToken` (`gh auth token` prints the one `gh` uses; keep it in the local *Value* column, not in *Shared Value*): the plugin itself needs no token because `gh pr diff` uses your `gh` login. If the token is missing or wrong, the error shows the URL called and says so. A `List models` request shows which models your key can use.
 
 ## Components
 
