@@ -6,6 +6,7 @@ import { execFileSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { parseExclude, selectDiff } from "./diff-select.mjs";
 import { parseLanguageArg, phrasesFor } from "./review-language.mjs";
+import { isTransient, modelChain, waitSeconds } from "./retry-policy.mjs";
 
 // Loads .env from the current folder (no dependencies). Variables already set take precedence.
 function loadDotEnv(path = ".env") {
@@ -36,6 +37,8 @@ const config = {
     apiKey: process.env.PR_REVIEW_API_KEY,
     baseUrl: (process.env.PR_REVIEW_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, ""),
     model: process.env.PR_REVIEW_MODEL || "openai/gpt-oss-120b",
+    // Optional: tried when the main model still fails with a transient error (429/5xx) after the retries.
+    fallbackModel: process.env.PR_REVIEW_FALLBACK_MODEL?.trim() || undefined,
     // Defaults designed for Groq's free tier (8K tokens per minute on openai/gpt-oss-120b).
     maxChars: Number(process.env.PR_REVIEW_MAX_CHARS) || 16000,
     // Response token limit (max_tokens): 2048 truncated reviews mid-sentence.
@@ -44,7 +47,9 @@ const config = {
     reasoningEffort: process.env.PR_REVIEW_REASONING_EFFORT?.trim() || undefined,
     exclude: parseExclude(process.env.PR_REVIEW_EXCLUDE),
 };
-const label = `${config.model} @ ${new URL(config.baseUrl).host}`;
+const host = new URL(config.baseUrl).host;
+const labelFor = (model) => `${model} @ ${host}`;
+let label = labelFor(config.model);
 
 let language, args;
 try {
@@ -58,7 +63,8 @@ const phrases = phrasesFor(language);
 if (args[0] === "--check") {
     // Used by the SKILL at startup: tells whether the review is configured, without ever printing the key.
     if (config.apiKey) {
-        console.log(`LLM review configured: ${label} (max ${config.maxTokens} tokens)`);
+        console.log(`LLM review configured: ${label} (max ${config.maxTokens} tokens)` +
+            (config.fallbackModel ? `, fallback ${config.fallbackModel}` : ""));
         process.exit(0);
     }
     console.log("LLM review not configured: PR_REVIEW_API_KEY missing (environment or .env).");
@@ -115,10 +121,10 @@ ${selection.text}
 `;
 
 const MAX_RETRIES = 2;
-const MAX_WAIT_SECONDS = 60;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callLlm() {
+// Calls one model, retrying transient errors; returns { data } on success or { status, errText } when it gives up.
+async function callModel(model) {
     for (let attempt = 0; ; attempt++) {
         const response = await fetch(`${config.baseUrl}/chat/completions`, {
             method: "POST",
@@ -127,25 +133,34 @@ async function callLlm() {
                 "Authorization": `Bearer ${config.apiKey}`,
             },
             body: JSON.stringify({
-                model: config.model,
+                model,
                 messages: [{ role: "user", content: prompt }],
                 max_tokens: config.maxTokens,
                 ...(config.reasoningEffort && { reasoning_effort: config.reasoningEffort }),
             }),
         });
 
-        if (response.ok) return response.json();
+        if (response.ok) return { data: await response.json() };
 
         const errText = await response.text();
-        if (response.status === 429 && attempt < MAX_RETRIES) {
-            const retryAfter = Number(response.headers.get("retry-after"));
-            const waitSeconds = Math.min(retryAfter > 0 ? retryAfter : 10 * (attempt + 1), MAX_WAIT_SECONDS);
-            console.error(`LLM review (${label}): HTTP 429, retrying ${attempt + 1}/${MAX_RETRIES} in ${waitSeconds}s.`);
-            await sleep(waitSeconds * 1000);
-            continue;
-        }
-        fail(`HTTP ${response.status}: ${errText.substring(0, 500)}`);
+        if (!isTransient(response.status) || attempt >= MAX_RETRIES) return { status: response.status, errText };
+        const seconds = waitSeconds(attempt, Number(response.headers.get("retry-after")));
+        console.error(`LLM review (${labelFor(model)}): HTTP ${response.status}, retrying ${attempt + 1}/${MAX_RETRIES} in ${seconds}s.`);
+        await sleep(seconds * 1000);
     }
+}
+
+// Main model first; if it ends on a transient error and a fallback is configured, tries the fallback.
+async function callLlm() {
+    let last;
+    for (const model of modelChain(config.model, config.fallbackModel)) {
+        if (last) console.error(`LLM review: ${labelFor(config.model)} failed (HTTP ${last.status}), trying fallback ${labelFor(model)}.`);
+        label = labelFor(model);
+        last = await callModel(model);
+        if (last.data) return last.data;
+        if (!isTransient(last.status)) break;
+    }
+    fail(`HTTP ${last.status}: ${last.errText.substring(0, 500)}`);
 }
 
 try {
