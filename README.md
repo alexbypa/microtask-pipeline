@@ -20,6 +20,7 @@ AI can write code fast. The hard part is trusting it. microtask-pipeline makes t
 - 🎓 **Learn while you ship.** Mentoring mode lets *you* write the code while the pipeline plans, tests and reviews it, then asks Senior-level questions on your choices. Or let the agent write the code and get the questions on *its* code.
 - 🤖 **A second opinion from another model.** Optionally sends the PR diff to any OpenAI-compatible LLM (Groq, Gemini, OpenAI, Mistral, DeepSeek, Ollama…) and posts its review as a PR comment.
 - 🗺️ **From roadmap to queue in one command.** `/microtask-pipeline:plan` turns a markdown roadmap into grouped, typed microtasks.
+- 🌍 **Speaks your language.** Questions, reports and PRs follow the language you write your tasks in. Code and commits stay in the language you publish in.
 - 🧩 **Any stack, .NET first.** Works with dotnet, npm, Python, Go, Rust, Make… With Roslyn MCP it does real C# symbol analysis and public API diffs; with context7 it checks external library signatures against the version you actually use.
 
 ## Quick start
@@ -93,12 +94,12 @@ Without `--auto` or `--manual` the pipeline asks which mode to use.
 
 ## Who writes the code
 
-When a group contains `code` tasks, the pipeline always asks who writes the production code:
+When a group contains `code` tasks, the pipeline always asks who writes the production code (the labels appear in your language):
 
 | Option | What happens |
 |---|---|
-| `Io (mentoring)` | **You** write the code. The pipeline shows only the signatures (no bodies), saves a resumable plan in `outcomes/microtask/<ID>-plan.md` and stops. Run `--resume` when you're done: it tests and reviews *your* code, gives review fixes in words (no code), then asks 4-5 Senior-level questions and waits for your answers. |
-| `Agent + domande da Senior` | The agent writes the code and the pipeline **never stops for questions**. The questions on the agent's code are written to the group report, and shown all together at the very end (after the PR in `--auto`), to check you understand its choices. Answer whenever you like. |
+| `Me (mentoring)` | **You** write the code. The pipeline shows only the signatures (no bodies), saves a resumable plan in `outcomes/microtask/<ID>-plan.md` and stops. Run `--resume` when you're done: it tests and reviews *your* code, gives review fixes in words (no code), then asks 4-5 Senior-level questions and waits for your answers. |
+| `Agent + Senior questions` | The agent writes the code and the pipeline **never stops for questions**. The questions on the agent's code are written to the group report, and shown all together at the very end (after the PR in `--auto`), to check you understand its choices. Answer whenever you like. |
 | `Agent` | The agent writes the code, no questions. |
 
 Tests are always written by the `test-runner` agent. The recommended option is chosen per group (mentoring for new features and architecture, agent for mechanical fixes) and can be tuned with a project rule in `.claude/rules/mentoring-mode.md`.
@@ -114,12 +115,12 @@ The PR body is a report for people who didn't follow the work:
 - **Verification**: warnings, tests and coverage, baseline → now.
 - **Notes**: follow-ups, suggested bump, how the gates went, CI warnings.
 
-The PR is written in the language of the task text in your queue (or `PR language`), so a queue written in Italian gets an Italian PR. Requires the GitHub CLI (`gh`) authenticated.
+**Your language, automatically.** Chat, questions and reports follow the language you write in, and the PR follows the language of the task text in your queue: tasks written in Italian get an Italian PR, tasks in Albanian an Albanian one. No setting needed. Requires the GitHub CLI (`gh`) authenticated.
 
 ## Queue format
 
 ```markdown
-| Stato | ID | Gruppo | Tipo | Task |
+| Status | ID | Group | Type | Task |
 |---|---|---|---|---|
 | [ ] | A1 | G1 | code | Fix async bug in HttpClientHelper |
 | [ ] | A2 | G1 | analysis | Evaluate naming breaking change |
@@ -127,9 +128,10 @@ The PR is written in the language of the task text in your queue (or `PR languag
 | [ ] | C1 | G3 | content | Blog post draft |
 ```
 
-- **Stato (status):** `[ ]` to do · `[/]` in progress · `[x]` done
-- **Gruppo (group):** one commit (and one PR) per group
-- **Tipo (type):** `code` full pipeline · `analysis` report in `outcomes/audits/` · `docs` documentation only · `content` drafts in `outcomes/content/` (never published)
+- **Status:** `[ ]` to do · `[/]` in progress · `[x]` done
+- **Group:** one commit (and one PR) per group
+- **Type:** `code` full pipeline · `analysis` report in `outcomes/audits/` · `docs` documentation only · `content` drafts in `outcomes/content/` (never published)
+- **Headers:** any language works (e.g. `| Stato | ID | Gruppo | Tipo | Task |`): what matters is the column order.
 - **Order:** without an ID the pipeline takes the first `[ ]` row from the top and runs its group. Follow-ups are appended at the bottom.
 
 ## Configuration
@@ -140,7 +142,7 @@ The PR is written in the language of the task text in your queue (or `PR languag
 ## Microtask config
 - Queue: TODO.md
 - Done: DONE.md
-- Branch: outcome_yyyyMMdd-<Gruppo>
+- Branch: outcome_yyyyMMdd-<Group>
 - Build: dotnet build src/MySolution.slnx -c Release
 - Test: dotnet test src/MySolution.slnx
 - Coverage: dotnet test src/MySolution.slnx -c Release --collect "Code Coverage;Format=cobertura" --results-directory TestResults/coverage
@@ -148,21 +150,19 @@ The PR is written in the language of the task text in your queue (or `PR languag
 - Docs: README.md, CHANGELOG.md, docs/
 - Language: English
 - Social drafts: off
-- PR language: English
 ```
 
 | Key | Default | Meaning |
 |---|---|---|
 | `Queue` | `TODO.md` | File with the queue table |
 | `Done` | *(none)* | Archive for completed tasks; without it finished rows stay `[x]` in the queue |
-| `Branch` | `outcome_yyyyMMdd-<Gruppo>` | Working branch per group |
+| `Branch` | `outcome_yyyyMMdd-<Group>` | Working branch per group |
 | `Build` / `Test` | **Commands** section of `CLAUDE.md` | Build and test commands |
 | `Coverage` | *(none)* | Test command producing Cobertura XML. Every changed production line must be covered, and global coverage must never drop below the baseline |
 | `Watch dir` | `src` | Source folder watched by the doc-sync hook |
 | `Docs` | `README.md, CHANGELOG.md` | Docs kept in sync with the code |
-| `Language` | `English` | Language of code, README, CHANGELOG and commits |
+| `Language` | `English` | Language of what gets published: code, README, CHANGELOG and commit messages. The conversation always follows your language |
 | `Social drafts` | `off` | `on` → a social post draft (Reddit, LinkedIn, X…) for every new feature, in `outcomes/social/`. Never published |
-| `PR language` | *(task language)* | Forces a language for PR body, comments and LLM review |
 
 Project rules in `.claude/rules/*.md` are passed to every agent: add project-specific checks there instead of editing the plugin.
 

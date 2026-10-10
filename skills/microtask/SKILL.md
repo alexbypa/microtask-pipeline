@@ -13,7 +13,7 @@ Cerca nel `CLAUDE.md` del progetto la sezione `## Microtask config`. Valori manc
 |---|---|---|
 | `Queue` | `TODO.md` | File con la tabella coda |
 | `Done` | *(assente → task completati restano `[x]` in coda)* | File archivio dei task completati: la riga si sposta qui da `Queue` |
-| `Branch` | `outcome_yyyyMMdd-<Gruppo>` | Branch di lavoro: `yyyyMMdd` = data odierna, `<Gruppo>` = gruppo selezionato (es. `outcome_20261002-G0`) |
+| `Branch` | `outcome_yyyyMMdd-<Group>` | Branch di lavoro: `yyyyMMdd` = data odierna, `<Group>` (o `<Gruppo>`) = gruppo selezionato (es. `outcome_20261002-G0`) |
 | `Build` | sezione **Commands** del CLAUDE.md | Comando build |
 | `Test` | sezione **Commands** del CLAUDE.md | Comando/i test |
 | `Coverage` | *(assente → nessuna coverage)* | Comando test che produce coverage Cobertura XML; se presente sostituisce `Test` in baseline e passo III |
@@ -21,13 +21,12 @@ Cerca nel `CLAUDE.md` del progetto la sezione `## Microtask config`. Valori manc
 | `Docs` | `README.md, CHANGELOG.md` | File documentazione da tenere allineati |
 | `Language` | `English` | Lingua output esterni (codice, README, CHANGELOG, commit) |
 | `Social drafts` | `off` | `on` → bozza di post social per ogni feature (passo IV, agent `social-writer`) |
-| `PR language` | *(assente → lingua del task)* | Forza una lingua per body e commenti della PR e per la review LLM |
 
 Build o Test non trovati → chiedimeli una volta e proponi di aggiungerli al CLAUDE.md.
 
 ## Formato coda
 Tabella nel file `Queue`:
-`| Stato | ID | Gruppo | Tipo | Task |` — Stato: `[ ]` `[/]` `[x]` · Tipo: `code` `analysis` `docs` `content`.
+`| Status | ID | Group | Type | Task |` — Status: `[ ]` `[/]` `[x]` · Type: `code` `analysis` `docs` `content`. Le intestazioni possono essere in qualunque lingua (es. `| Stato | ID | Gruppo | Tipo | Task |`): contano l'ordine delle colonne e i valori di Status e Type.
 
 ## Regole
 - Nella pipeline **un microtask alla volta**; **commit a fine gruppo**.
@@ -43,7 +42,7 @@ Tabella nel file `Queue`:
   - **Lingua della conversazione** = quella dei messaggi che l'utente scrive a parole; finché ha lanciato solo il comando, è la lingua del task.
   - Report a me, frasi fisse (righe dei gate, `Bozza social: …`, `⚠ CI non verificata…`) e file in `outcomes/microtask/`: lingua della conversazione. Le frasi fisse sono scritte qui in italiano: traducile mantenendo il significato.
   - Output esterni (codice, README, CHANGELOG, commit message): `Language`.
-  - **Lingua della PR** (body, commenti, review LLM): `PR language` se configurato, altrimenti la lingua del task.
+  - **Lingua della PR** (body, commenti, review LLM): la lingua del task.
   - Titolo PR = prima riga del commit message, resta com'è; comandi, path, nomi di tipi/metodi e codice restano invariati.
 - I subagent girano in background: mentre aspetti, chiudi il turno con **una riga** (passo in corso), niente riepiloghi intermedi.
 - Marker pipeline: all'avvio `touch "$(git rev-parse --git-dir)/microtask-active"`; a ogni STOP (fine gruppo o blocco) `rm -f` dello stesso file. Col marker l'hook Stop doc-sync tace: doc-sync è già nel passo IV.
@@ -54,7 +53,7 @@ Da `$ARGUMENTS` (token separati da spazi; `--auto` / `--manual` sono la modalit�
 | Argomento | Cosa esegue |
 |---|---|
 | ID di un **task** (es. `A29`, colonna ID) | Solo quel microtask, poi "Fine gruppo" e STOP |
-| ID di un **gruppo** (es. `G0`, colonna Gruppo) | Tutti i `[ ]` di quel gruppo, nell'ordine delle righe, poi "Fine gruppo" e STOP |
+| ID di un **gruppo** (es. `G0`, colonna Group) | Tutti i `[ ]` di quel gruppo, nell'ordine delle righe, poi "Fine gruppo" e STOP |
 | nessuno | Primo `[ ]` **dall'alto** (posizione della riga, non nome del gruppo) → il suo Gruppo, come sopra |
 
 ID non trovato, o gruppo senza `[ ]` → dillo e fermati. Segna `[/]` nella coda il microtask in corso.
@@ -86,8 +85,8 @@ Sezione 3 obbligatoria anche con impatto basso. `CLAUDE.md` senza obiettivi → 
 
 Subito dopo, **una sola** chiamata `AskUserQuestion` con le seguenti domande sequenziali:
 1. "Procedo con <Gruppo>?" → `Procedi` / `Fermati` (Fermati → rimuovi `[/]`, STOP).
-2. "Chi scrive il codice di produzione?" → `Io (mentoring)` / `Agent + domande da Senior` / `Agent`. **Obbligatoria** se il gruppo ha almeno un task `code`: si fa sempre, anche in `--auto`, e nessuna config la salta (gruppi solo `analysis`/`docs`/`content` → niente domanda). Metti per prima, con `(consigliato)`, l'opzione suggerita dalla regola `.claude/rules/mentoring-mode.md` se il progetto ce l'ha, altrimenti da questi criteri: `Io (mentoring)` per feature e decisioni architetturali (nuovo file, interfaccia, endpoint, progetto, cambio di layer, area mai toccata dall'utente); `Agent` per fix su codice esistente, refactor meccanici, task sotto le 5 righe senza nuove astrazioni, config, docs. Nella descrizione dell'opzione consigliata, una riga sul perché. Vale per tutto il gruppo; i test li scrive sempre `test-runner`.
-   `Agent + domande da Senior` = scrive l'agent, poi lo Step 3 sul suo codice (vedi "Step 3"). Opzioni sempre tutte e tre in questa domanda: le domande di una `AskUserQuestion` arrivano insieme (max 4), quindi niente domande che dipendono dalla risposta a un'altra.
+2. "Chi scrive il codice di produzione?" → `Me (mentoring)` / `Agent + Senior questions` / `Agent`. **Obbligatoria** se il gruppo ha almeno un task `code`: si fa sempre, anche in `--auto`, e nessuna config la salta (gruppi solo `analysis`/`docs`/`content` → niente domanda). Metti per prima, con `(consigliato)`, l'opzione suggerita dalla regola `.claude/rules/mentoring-mode.md` se il progetto ce l'ha, altrimenti da questi criteri: `Me (mentoring)` per feature e decisioni architetturali (nuovo file, interfaccia, endpoint, progetto, cambio di layer, area mai toccata dall'utente); `Agent` per fix su codice esistente, refactor meccanici, task sotto le 5 righe senza nuove astrazioni, config, docs. Nella descrizione dell'opzione consigliata, una riga sul perché. Vale per tutto il gruppo; i test li scrive sempre `test-runner`.
+   `Agent + Senior questions` = scrive l'agent, poi lo Step 3 sul suo codice (vedi "Step 3"). Etichette delle opzioni tradotte nella lingua della conversazione (es. in italiano `Io (mentoring)` / `Agent + domande da Senior` / `Agent`). Opzioni sempre tutte e tre in questa domanda: le domande di una `AskUserQuestion` arrivano insieme (max 4), quindi niente domande che dipendono dalla risposta a un'altra.
 3. Solo senza `--auto`/`--manual`: "Modalità?" → `Manuale` / `Auto`, una riga ciascuna su cosa comporta (vedi sotto).
 4. Solo senza `--manual` e se la review LLM è configurata: "Dopo la PR, chiedo a <modello @ host> una review pubblicata come commento? (vale solo in Auto)" → `Sì` / `No`.
 
@@ -95,7 +94,7 @@ Prima della `AskUserQuestion` lancia `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-rev
 
 ## Modalità
 - `--manual` → si ferma ai gate (⏸ GATE 1, ⏸ GATE 2) e attende la mia approvazione. Nessun push.
-- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano; senza codice e risposte dell'utente non si va avanti. Con `Agent + domande da Senior` lo Step 3 non si ferma: le domande arrivano a fine gruppo. La modalità è salvata nel piano e vale anche dopo `--resume`.
+- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano; senza codice e risposte dell'utente non si va avanti. Con `Agent + Senior questions` lo Step 3 non si ferma: le domande arrivano a fine gruppo. La modalità è salvata nel piano e vale anche dopo `--resume`.
 - Nessuno dei due → la modalità è la terza domanda dell'Introduzione.
 
 **STOP anche in `--auto`** (fermati, spiega, attendi):
@@ -112,7 +111,7 @@ Le richieste di permesso di Claude Code (es. `git push`, `gh pr create`) non dip
 | Tipo | Passi |
 |---|---|
 | `code` | 0 → I → ⏸G1 → II → III → V → IV |
-| `code` con `Agent + domande da Senior` | 0 → I → ⏸G1 → II → III → V → Step 3 (solo domande, nessuno stop) → IV |
+| `code` con `Agent + Senior questions` | 0 → I → ⏸G1 → II → III → V → Step 3 (solo domande, nessuno stop) → IV |
 | `code` in mentoring | 0 → I → ⏸G1 → II-user (⏸ STOP) · `--resume` → III → V → ⏸ Step 3 → IV |
 | `analysis` | 0 → I → report in `outcomes/audits/<ID>.md` → IV |
 | `docs` | I (solo impatto) → ⏸G1 → IV → doc-sync |
@@ -177,7 +176,7 @@ Dopo ogni giro di fix → rilancia III (build completa + test) prima di chiudere
 
 In mentoring i fix dei 🔴 e dei 🟡 piccoli li fa l'utente: mostra i findings con `file:riga` e il fix proposto **a parole** (niente codice), annotali in `<ID>-plan.md` con il numero del giro, rimuovi il marker pipeline, poi ⏸ STOP con `/microtask-pipeline:microtask <ID> --resume`.
 
-### Step 3. Domande da Senior (mentoring, o `Agent + domande da Senior`)
+### Step 3. Domande da Senior (mentoring, o `Agent + Senior questions`)
 Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice del microtask (trade-off, GC e allocazioni, performance, concorrenza, edge case), ognuna ancorata a `file:riga`.
 - In mentoring il codice è dell'utente: le domande mettono alla prova le sue scelte. ⏸ Attendi le risposte (anche in `--auto`), poi commentale in 1-2 righe ciascuna. Domande, risposte e commenti vanno in `<ID>-plan.md` sotto `## Step 3`. Poi passo IV.
 - Con `Agent` il codice è dell'agent: le domande verificano che l'utente abbia capito il perché delle sue scelte (es. "perché X invece di Y?", "cosa succede se…?"). **Nessuno stop**: scrivi solo le domande nel report di gruppo sotto `## Step 3 — <ID>` e passa subito al passo IV. Le mostri a fine gruppo (punto 5 di "Fine gruppo").
@@ -198,7 +197,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
    - da verificare dopo (es. CI al primo push);
    - bump suggerito;
    - in mentoring: link a `outcomes/microtask/<ID>-plan.md` per microtask;
-   - con `Agent + domande da Senior`: sezioni `## Step 3 — <ID>` con le sole domande (vedi "Step 3");
+   - con `Agent + Senior questions`: sezioni `## Step 3 — <ID>` con le sole domande (vedi "Step 3");
    - **Prossima sessione**, ultima sezione, sempre, autosufficiente per ripartire a contesto vuoto:
      ```markdown
      ## Prossima sessione
@@ -220,7 +219,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
    - Mostra il link della PR.
    - Review LLM (solo se scelta `Sì` all'avvio): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n> --lang "<lingua della PR>"`. Pubblica un commento sulla PR. Errore (es. `PR_REVIEW_API_KEY` mancante, HTTP 429 anche dopo i tentativi, API non raggiungibile) → riporta a me in chat la riga `Review LLM fallita (...)` stampata dallo script, senza modificare il report di gruppo (che è già stato committato), nessuno STOP aggiuntivo.
    - Punto 5, poi STOP.
-5. **Domande da Senior** (solo con `Agent + domande da Senior`): dopo il commit (in `--auto` dopo la PR), mostra in chat tutte le domande `## Step 3 — <ID>` del gruppo, raggruppate per microtask, e ferma la pipeline: il lavoro è finito. L'utente risponde quando vuole, anche in parte o per niente; commenta ogni risposta in 1-2 righe. Risposte e commenti restano in chat: niente nuovi commit.
+5. **Domande da Senior** (solo con `Agent + Senior questions`): dopo il commit (in `--auto` dopo la PR), mostra in chat tutte le domande `## Step 3 — <ID>` del gruppo, raggruppate per microtask, e ferma la pipeline: il lavoro è finito. L'utente risponde quando vuole, anche in parte o per niente; commenta ogni risposta in 1-2 righe. Risposte e commenti restano in chat: niente nuovi commit.
 
 ### Body della PR
 Un **report** che spiega il lavoro a chi non l'ha seguito, nella **lingua della PR** (vedi Regole; indipendente da `Language`), frasi brevi; intestazioni ed etichette sono quelle dell'esempio, tradotte nella lingua della PR. Fonti: report di gruppo, Spiegazione semplice e piano del passo I, riepiloghi di implementer e test-runner.
@@ -280,12 +279,11 @@ Regole:
 ## Microtask config
 - Queue: TODO.md
 - Done: DONE.md
-- Branch: outcome_yyyyMMdd-<Gruppo>
+- Branch: outcome_yyyyMMdd-<Group>
 - Build: dotnet build src/MySolution.slnx -c Release
 - Test: dotnet test src/MyProject.Tests
 - Coverage: dotnet test src/MySolution.slnx -c Release --collect "Code Coverage;Format=cobertura" --results-directory TestResults/coverage
 - Watch dir: src
 - Docs: README.md, CHANGELOG.md, docs/
 - Social drafts: on    # opzionale: default off
-- PR language: English    # opzionale: senza, la PR segue la lingua del testo dei task
 ```
