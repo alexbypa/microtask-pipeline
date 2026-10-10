@@ -95,7 +95,7 @@ Prima della `AskUserQuestion` lancia `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-rev
 
 ## Modalità
 - `--manual` → si ferma ai gate (⏸ GATE 1, ⏸ GATE 2) e attende la mia approvazione. Nessun push.
-- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano; lo stop dello Step 3 resta anche con `Agent + domande da Senior`: senza codice e risposte dell'utente non si va avanti. La modalità è salvata nel piano e vale anche dopo `--resume`.
+- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano; senza codice e risposte dell'utente non si va avanti. Con `Agent + domande da Senior` lo Step 3 non si ferma: le domande arrivano a fine gruppo. La modalità è salvata nel piano e vale anche dopo `--resume`.
 - Nessuno dei due → la modalità è la terza domanda dell'Introduzione.
 
 **STOP anche in `--auto`** (fermati, spiega, attendi):
@@ -112,7 +112,7 @@ Le richieste di permesso di Claude Code (es. `git push`, `gh pr create`) non dip
 | Tipo | Passi |
 |---|---|
 | `code` | 0 → I → ⏸G1 → II → III → V → IV |
-| `code` con `Agent + domande da Senior` | 0 → I → ⏸G1 → II → III → V → ⏸ Step 3 → IV |
+| `code` con `Agent + domande da Senior` | 0 → I → ⏸G1 → II → III → V → Step 3 (solo domande, nessuno stop) → IV |
 | `code` in mentoring | 0 → I → ⏸G1 → II-user (⏸ STOP) · `--resume` → III → V → ⏸ Step 3 → IV |
 | `analysis` | 0 → I → report in `outcomes/audits/<ID>.md` → IV |
 | `docs` | I (solo impatto) → ⏸G1 → IV → doc-sync |
@@ -178,9 +178,9 @@ Dopo ogni giro di fix → rilancia III (build completa + test) prima di chiudere
 In mentoring i fix dei 🔴 e dei 🟡 piccoli li fa l'utente: mostra i findings con `file:riga` e il fix proposto **a parole** (niente codice), annotali in `<ID>-plan.md` con il numero del giro, rimuovi il marker pipeline, poi ⏸ STOP con `/microtask-pipeline:microtask <ID> --resume`.
 
 ### Step 3. Domande da Senior (mentoring, o `Agent + domande da Senior`)
-Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice del microtask (trade-off, GC e allocazioni, performance, concorrenza, edge case), ognuna ancorata a `file:riga`. ⏸ Attendi le risposte (anche in `--auto`), poi commentale in 1-2 righe ciascuna. Poi passo IV.
-- In mentoring il codice è dell'utente: le domande mettono alla prova le sue scelte. Domande, risposte e commenti vanno in `<ID>-plan.md` sotto `## Step 3`.
-- Con `Agent` il codice è dell'agent: le domande verificano che l'utente abbia capito il perché delle sue scelte (es. "perché X invece di Y?", "cosa succede se…?"). Domande, risposte e commenti vanno nel report di gruppo sotto `## Step 3 — <ID>`.
+Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice del microtask (trade-off, GC e allocazioni, performance, concorrenza, edge case), ognuna ancorata a `file:riga`.
+- In mentoring il codice è dell'utente: le domande mettono alla prova le sue scelte. ⏸ Attendi le risposte (anche in `--auto`), poi commentale in 1-2 righe ciascuna. Domande, risposte e commenti vanno in `<ID>-plan.md` sotto `## Step 3`. Poi passo IV.
+- Con `Agent` il codice è dell'agent: le domande verificano che l'utente abbia capito il perché delle sue scelte (es. "perché X invece di Y?", "cosa succede se…?"). **Nessuno stop**: scrivi solo le domande nel report di gruppo sotto `## Step 3 — <ID>` e passa subito al passo IV. Le mostri a fine gruppo (punto 5 di "Fine gruppo").
 
 ### IV. Memoria → agent `microtask-pipeline:memory-updater`, poi `microtask-pipeline:doc-sync-reviewer`
 Passa: config (`Queue`, `Done`, `Docs`, `Language`) + findings rimandati da trasformare in follow-up. Aggiorna coda (`[x]` + nota, oppure riga spostata in `Done`), CHANGELOG `## [Unreleased]`, `Docs`.
@@ -198,7 +198,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
    - da verificare dopo (es. CI al primo push);
    - bump suggerito;
    - in mentoring: link a `outcomes/microtask/<ID>-plan.md` per microtask;
-   - con `Agent + domande da Senior`: sezioni `## Step 3 — <ID>` (vedi "Step 3");
+   - con `Agent + domande da Senior`: sezioni `## Step 3 — <ID>` con le sole domande (vedi "Step 3");
    - **Prossima sessione**, ultima sezione, sempre, autosufficiente per ripartire a contesto vuoto:
      ```markdown
      ## Prossima sessione
@@ -210,7 +210,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
      ```
      Coda vuota → `**Comando:** nessuno, coda esaurita`.
 2. **File del commit**: elenco esplicito dei file toccati dal gruppo (dai riepiloghi dei passi + coda, `Done`, CHANGELOG, Docs, report, bozze social, `<ID>-plan.md` in mentoring). Confrontalo con `git status --short`: il resto va in "esclusi".
-3. **⏸ GATE 2:** mostra `git diff --stat -- <file del commit>` + i file nuovi (non compaiono nel diff), i file esclusi, link al report, bump suggerito, commit message (conventional, in `Language`, con il trailer `Co-Authored-By` di Claude Code: l'attribuzione AI resta visibile, non toglierlo; se manca aggiungi `Co-Authored-By: Claude <noreply@anthropic.com>`). Poi, solo con `Social drafts: on`, una riga per microtask, da sola: `Bozza social: outcomes/social/<ID>.md` oppure `Il task <ID> non è una feature quindi non creo la bozza del post social`; se nessun microtask del gruppo è una feature, anche `Il gruppo <Gruppo> non è una feature quindi non creo la bozza del post social`. Il gruppo tocca CI o build (workflow, solution/progetti, props) → aggiungi `⚠ CI non verificata: controllare la prima esecuzione dopo il push`. Il report entra nel commit del gruppo. Commit solo dopo conferma, con `git add -- <file del commit>` (mai `git add -A` / `git add .`). Poi STOP.
+3. **⏸ GATE 2:** mostra `git diff --stat -- <file del commit>` + i file nuovi (non compaiono nel diff), i file esclusi, link al report, bump suggerito, commit message (conventional, in `Language`, con il trailer `Co-Authored-By` di Claude Code: l'attribuzione AI resta visibile, non toglierlo; se manca aggiungi `Co-Authored-By: Claude <noreply@anthropic.com>`). Poi, solo con `Social drafts: on`, una riga per microtask, da sola: `Bozza social: outcomes/social/<ID>.md` oppure `Il task <ID> non è una feature quindi non creo la bozza del post social`; se nessun microtask del gruppo è una feature, anche `Il gruppo <Gruppo> non è una feature quindi non creo la bozza del post social`. Il gruppo tocca CI o build (workflow, solution/progetti, props) → aggiungi `⚠ CI non verificata: controllare la prima esecuzione dopo il push`. Il report entra nel commit del gruppo. Commit solo dopo conferma, con `git add -- <file del commit>` (mai `git add -A` / `git add .`). Poi punto 5, poi STOP.
    In `--auto`: mostra lo stesso riepilogo, fai il commit senza attendere e passa al punto 4.
 4. **PR** (solo `--auto`):
    - Mai push su `main`/`master`: se sei lì, STOP.
@@ -219,7 +219,8 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
    - `gh` assente/non autenticato o push rifiutato → STOP con il comando da lanciare a mano; il commit resta locale.
    - Mostra il link della PR.
    - Review LLM (solo se scelta `Sì` all'avvio): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n> --lang "<lingua della PR>"`. Pubblica un commento sulla PR. Errore (es. `PR_REVIEW_API_KEY` mancante, HTTP 429 anche dopo i tentativi, API non raggiungibile) → riporta a me in chat la riga `Review LLM fallita (...)` stampata dallo script, senza modificare il report di gruppo (che è già stato committato), nessuno STOP aggiuntivo.
-   - STOP.
+   - Punto 5, poi STOP.
+5. **Domande da Senior** (solo con `Agent + domande da Senior`): dopo il commit (in `--auto` dopo la PR), mostra in chat tutte le domande `## Step 3 — <ID>` del gruppo, raggruppate per microtask, e ferma la pipeline: il lavoro è finito. L'utente risponde quando vuole, anche in parte o per niente; commenta ogni risposta in 1-2 righe. Risposte e commenti restano in chat: niente nuovi commit.
 
 ### Body della PR
 Un **report** che spiega il lavoro a chi non l'ha seguito, nella **lingua della PR** (vedi Regole; indipendente da `Language`), frasi brevi; intestazioni ed etichette sono quelle dell'esempio, tradotte nella lingua della PR. Fonti: report di gruppo, Spiegazione semplice e piano del passo I, riepiloghi di implementer e test-runner.
