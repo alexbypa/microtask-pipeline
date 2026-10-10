@@ -22,10 +22,9 @@ Obiettivo: scrivere la sezione `## Microtask config` nel `CLAUDE.md` del progett
 | `Docs` | `README.md`, `CHANGELOG.md`, `docs/` — solo quelli esistenti |
 | `Queue` | `TODO.md` |
 | `Done` | opzionale: `DONE.md` se esiste, altrimenti ometti (task completati restano `[x]` in coda) |
-| `Branch` | `outcome_yyyyMMdd-<Gruppo>` (`<Gruppo>` resta letterale: la skill lo sostituisce col gruppo eseguito) |
+| `Branch` | `outcome_yyyyMMdd-<Group>` (`<Group>` resta letterale: la skill lo sostituisce col gruppo eseguito) |
 | `Language` | lingua di README/CHANGELOG esistenti; default English |
 | `Social drafts` | opzionale: ometti (default `off`); `on` solo se l'utente vuole bozze di post social per le feature |
-| `PR language` | opzionale: ometti (PR, commenti e review LLM seguono la lingua del testo dei task in coda); aggiungila solo se l'utente vuole forzarne una |
 
 Verifica i comandi rilevati eseguendoli **solo se** innocui e veloci (build/test); altrimenti segnala "non verificato".
 
@@ -35,7 +34,7 @@ Mostra la sezione completa pronta da incollare:
 ## Microtask config
 - Queue: TODO.md
 - Done: DONE.md        # opzionale
-- Branch: outcome_yyyyMMdd-<Gruppo>
+- Branch: outcome_yyyyMMdd-<Group>
 - Build: <comando>
 - Test: <comando>
 - Coverage: <comando>   # opzionale
@@ -50,7 +49,7 @@ File `Queue` inesistente o senza tabella coda → proponi di aggiungere:
 ```markdown
 ## Microtask queue
 
-| Stato | ID | Gruppo | Tipo | Task |
+| Status | ID | Group | Type | Task |
 |---|---|---|---|---|
 | [ ] | T1 | G1 | code | <primo task> |
 ```

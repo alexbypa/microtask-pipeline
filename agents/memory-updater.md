@@ -12,7 +12,7 @@ Config ricevuta: `Queue`, `Done` (opzionale), `Docs`, `Language` + riepilogo del
 ## Passi
 1. **Coda** (`Queue`):
    - `Done` assente → microtask → `[x]` + nota breve (cosa, file principali).
-   - `Done` presente → **togli** la riga dalla coda e aggiungila in fondo alla tabella del file `Done` come `| ID | Gruppo | Task | Esito |` (Task = titolo breve, Esito = nota breve + link al report/audit se esiste). File o tabella assenti → creali con questa intestazione.
+   - `Done` presente → **togli** la riga dalla coda e aggiungila in fondo alla tabella del file `Done` con le colonne `| ID | Group | Task | Outcome |` (Task = titolo breve, Outcome = nota breve + link al report/audit se esiste). Tabella esistente con intestazioni in un'altra lingua (es. `| ID | Gruppo | Task | Esito |`) → tienile. File o tabella assenti → creali con l'intestazione inglese.
    Follow-up nuovi → righe `[ ]` **in fondo** alla tabella coda, Gruppo nuovo, ID successivo al più alto esistente (in `Queue` **e** `Done`). Prima verifica il presupposto su codice e `.claude/rules/`: niente task basati su ipotesi non controllate.
 2. **CHANGELOG.md** (se esiste): voce in `## [Unreleased]` (crea la sezione se manca), formato Keep a Changelog (Added / Changed / Fixed), in `Language`.
 3. **`Docs`**: aggiorna solo se cambia API o comportamento visibile all'utente. Esempi di codice devono corrispondere all'API reale.

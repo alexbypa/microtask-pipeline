@@ -16,7 +16,7 @@ Questa skill **scrive solo la coda**: non esegue nessun task (quello lo fa `/mic
 Leggi `## Microtask config` nel `CLAUDE.md` del progetto (`Queue`, default `TODO.md`; `Done`, opzionale). Sezione assente → STOP: "lancia prima `/microtask-pipeline:init`".
 
 ## 2. ID e gruppi esistenti
-Raccogli tutti gli ID (colonna ID) e i gruppi (colonna Gruppo) già presenti in `Queue` **e** `Done`. I nuovi non devono sovrapporsi né tra loro né con quelli esistenti, e **nessun ID nuovo può coincidere con un nome di gruppo** (la pipeline cerca l'argomento in entrambe le colonne). `--prefix` già usato → continua la numerazione dal più alto esistente con quella lettera.
+Raccogli tutti gli ID (colonna ID) e i gruppi (colonna Group) già presenti in `Queue` **e** `Done`. I nuovi non devono sovrapporsi né tra loro né con quelli esistenti, e **nessun ID nuovo può coincidere con un nome di gruppo** (la pipeline cerca l'argomento in entrambe le colonne). `--prefix` già usato → continua la numerazione dal più alto esistente con quella lettera.
 
 ## 3. Lettura
 Leggi **solo** il file roadmap, una volta. Niente codice, niente altri documenti, salvo un link esplicito del documento che serve a capire il perimetro di un task.
@@ -40,7 +40,7 @@ Mostra, nella lingua della conversazione:
 1. le segnalazioni;
 2. la tabella proposta, nel formato della coda:
    ```markdown
-   | Stato | ID | Gruppo | Tipo | Task |
+   | Status | ID | Group | Type | Task |
    |---|---|---|---|---|
    | [ ] | R0 | RG0 | analysis | Decidere i punti aperti in un ADR → docs/plan.md#punti-aperti |
    ```
@@ -53,7 +53,7 @@ Poi **una sola** `AskUserQuestion`: "Aggiungo questi task a `<Queue>`?" → `Agg
 ## 7. Scrittura
 Solo dopo `Aggiungi`:
 - righe **in fondo** alla tabella coda esistente, con Edit (mai riscrivere il file, mai riordinare righe esistenti);
-- tabella assente → creala in fondo al file sotto `## Microtask queue` con l'intestazione `| Stato | ID | Gruppo | Tipo | Task |`;
+- tabella assente → creala in fondo al file sotto `## Microtask queue` con l'intestazione `| Status | ID | Group | Type | Task |`; tabella esistente con intestazioni in un'altra lingua → tienile;
 - file `Queue` assente → crealo con quella sola sezione.
 Rileggi il file e verifica che le righe preesistenti siano invariate.
 
