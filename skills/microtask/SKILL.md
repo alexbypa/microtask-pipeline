@@ -62,7 +62,7 @@ ID non trovato, o gruppo senza `[ ]` → dillo e fermati. Segna `[/]` nella coda
 `--resume` (con o senza ID) non seleziona righe `[ ]`: riprende il microtask `[/]` fermo in mentoring (vedi "Ripresa"). Senza ID → la riga `[/]` della coda; nessuna `[/]`, più di una, o `outcomes/microtask/<ID>-plan.md` assente → dillo e fermati.
 
 ## Introduzione (primo output, prima di qualsiasi domanda)
-**Ordine di avvio obbligatorio:** selezione → introduzione → domanda "procedo?" → domanda implementatore (obbligatoria se il gruppo ha un task `code`) → domanda modalità (solo senza flag) → branch → baseline. Mai chiedere la modalità prima dell'introduzione. Con `--resume` niente introduzione né domande: vai a "Ripresa".
+**Ordine di avvio obbligatorio:** selezione → introduzione → domanda "procedo?" → domanda implementatore (obbligatoria se il gruppo ha un task `code`) → domanda Step 3 (solo con `Agent`) → domanda modalità (solo senza flag) → branch → baseline. Mai chiedere la modalità prima dell'introduzione. Con `--resume` niente introduzione né domande: vai a "Ripresa".
 
 Fonti: righe della coda selezionate, codice che toccano (lettura veloce, niente agent), obiettivi del `CLAUDE.md` del progetto (es. sezione **Obiettivi**). Lingua della conversazione, frasi brevi, niente giri di parole. Usa **esattamente** questo formato (markdown, non un paragrafo unico):
 
@@ -87,6 +87,7 @@ Sezione 3 obbligatoria anche con impatto basso. `CLAUDE.md` senza obiettivi → 
 Subito dopo, **una sola** chiamata `AskUserQuestion` con le seguenti domande sequenziali:
 1. "Procedo con <Gruppo>?" → `Procedi` / `Fermati` (Fermati → rimuovi `[/]`, STOP).
 2. "Chi scrive il codice di produzione?" → `Io (mentoring)` / `Agent`. **Obbligatoria** se il gruppo ha almeno un task `code`: si fa sempre, anche in `--auto`, e nessuna config la salta (gruppi solo `analysis`/`docs`/`content` → niente domanda). Metti per prima, con `(consigliato)`, l'opzione suggerita dalla regola `.claude/rules/mentoring-mode.md` se il progetto ce l'ha, altrimenti da questi criteri: `Io (mentoring)` per feature e decisioni architetturali (nuovo file, interfaccia, endpoint, progetto, cambio di layer, area mai toccata dall'utente); `Agent` per fix su codice esistente, refactor meccanici, task sotto le 5 righe senza nuove astrazioni, config, docs. Nella descrizione dell'opzione consigliata, una riga sul perché. Vale per tutto il gruppo; i test li scrive sempre `test-runner`.
+   - Solo se la risposta è `Agent`: "Vuoi le domande da Senior sul codice dell'Agent a fine microtask?" → `Sì` / `No`. `Sì` attiva lo Step 3 anche senza mentoring (vedi "Step 3"). Con `Io (mentoring)` niente domanda: lo Step 3 c'è già.
 3. Solo senza `--auto`/`--manual`: "Modalità?" → `Manuale` / `Auto`, una riga ciascuna su cosa comporta (vedi sotto).
 4. Solo senza `--manual` e se la review LLM è configurata: "Dopo la PR, chiedo a <modello @ host> una review pubblicata come commento? (vale solo in Auto)" → `Sì` / `No`.
 
@@ -94,7 +95,7 @@ Prima della `AskUserQuestion` lancia `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-rev
 
 ## Modalità
 - `--manual` → si ferma ai gate (⏸ GATE 1, ⏸ GATE 2) e attende la mia approvazione. Nessun push.
-- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano: senza codice e risposte dell'utente non si va avanti. La modalità è salvata nel piano e vale anche dopo `--resume`.
+- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano; lo stop dello Step 3 resta anche con `Agent` e domande `Sì`: senza codice e risposte dell'utente non si va avanti. La modalità è salvata nel piano e vale anche dopo `--resume`.
 - Nessuno dei due → la modalità è la terza domanda dell'Introduzione.
 
 **STOP anche in `--auto`** (fermati, spiega, attendi):
@@ -111,6 +112,7 @@ Le richieste di permesso di Claude Code (es. `git push`, `gh pr create`) non dip
 | Tipo | Passi |
 |---|---|
 | `code` | 0 → I → ⏸G1 → II → III → V → IV |
+| `code` con `Agent` e domande `Sì` | 0 → I → ⏸G1 → II → III → V → ⏸ Step 3 → IV |
 | `code` in mentoring | 0 → I → ⏸G1 → II-user (⏸ STOP) · `--resume` → III → V → ⏸ Step 3 → IV |
 | `analysis` | 0 → I → report in `outcomes/audits/<ID>.md` → IV |
 | `docs` | I (solo impatto) → ⏸G1 → IV → doc-sync |
@@ -175,8 +177,10 @@ Dopo ogni giro di fix → rilancia III (build completa + test) prima di chiudere
 
 In mentoring i fix dei 🔴 e dei 🟡 piccoli li fa l'utente: mostra i findings con `file:riga` e il fix proposto **a parole** (niente codice), annotali in `<ID>-plan.md` con il numero del giro, rimuovi il marker pipeline, poi ⏸ STOP con `/microtask-pipeline:microtask <ID> --resume`.
 
-### Step 3. Domande da Senior (solo mentoring)
-Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice scritto dall'utente (trade-off, GC e allocazioni, performance, concorrenza, edge case), ognuna ancorata a `file:riga`. ⏸ Attendi le risposte (anche in `--auto`), poi commentale in 1-2 righe ciascuna. Domande, risposte e commenti vanno in `<ID>-plan.md` sotto `## Step 3`. Poi passo IV.
+### Step 3. Domande da Senior (mentoring, o `Agent` con domande `Sì`)
+Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice del microtask (trade-off, GC e allocazioni, performance, concorrenza, edge case), ognuna ancorata a `file:riga`. ⏸ Attendi le risposte (anche in `--auto`), poi commentale in 1-2 righe ciascuna. Poi passo IV.
+- In mentoring il codice è dell'utente: le domande mettono alla prova le sue scelte. Domande, risposte e commenti vanno in `<ID>-plan.md` sotto `## Step 3`.
+- Con `Agent` il codice è dell'agent: le domande verificano che l'utente abbia capito il perché delle sue scelte (es. "perché X invece di Y?", "cosa succede se…?"). Domande, risposte e commenti vanno nel report di gruppo sotto `## Step 3 — <ID>`.
 
 ### IV. Memoria → agent `microtask-pipeline:memory-updater`, poi `microtask-pipeline:doc-sync-reviewer`
 Passa: config (`Queue`, `Done`, `Docs`, `Language`) + findings rimandati da trasformare in follow-up. Aggiorna coda (`[x]` + nota, oppure riga spostata in `Done`), CHANGELOG `## [Unreleased]`, `Docs`.
@@ -194,6 +198,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
    - da verificare dopo (es. CI al primo push);
    - bump suggerito;
    - in mentoring: link a `outcomes/microtask/<ID>-plan.md` per microtask;
+   - con `Agent` e domande `Sì`: sezioni `## Step 3 — <ID>` (vedi "Step 3");
    - **Prossima sessione**, ultima sezione, sempre, autosufficiente per ripartire a contesto vuoto:
      ```markdown
      ## Prossima sessione
