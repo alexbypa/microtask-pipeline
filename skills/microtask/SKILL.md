@@ -210,7 +210,7 @@ Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (
 4. **PR** (solo `--auto`):
    - Mai push su `main`/`master`: se sei lì, STOP.
    - `git push -u origin <branch>`.
-   - PR già aperta per il branch (`gh pr view --json number,url,state`) → aggiungi il body come commento (`gh pr comment`), nella lingua della PR. Altrimenti `gh pr create --base <branch di default> --title "<prima riga del commit message>" --body-file <file temporaneo>`, poi, con il numero della PR ora noto, completa i link ai file nel body e `gh pr edit <n> --body-file <file temporaneo>`.
+   - PR già aperta per il branch (`gh pr view --json number,url,state`) → aggiungi il body come commento (`gh pr comment`), nella lingua della PR (vedi Regole: quella del testo del task nel TODO). Altrimenti `gh pr create --base <branch di default> --title "<prima riga del commit message>" --body-file <file temporaneo>`, poi, con il numero della PR ora noto, completa i link ai file nel body e `gh pr edit <n> --body-file <file temporaneo>`.
    - `gh` assente/non autenticato o push rifiutato → STOP con il comando da lanciare a mano; il commit resta locale.
    - Mostra il link della PR.
    - Review LLM (solo se scelta `Sì` all'avvio): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n> --lang "<lingua della PR>"`. Pubblica un commento sulla PR. Errore (es. `PR_REVIEW_API_KEY` mancante, HTTP 429 anche dopo i tentativi, API non raggiungibile) → riporta a me in chat la riga `Review LLM fallita (...)` stampata dallo script, senza modificare il report di gruppo (che è già stato committato), nessuno STOP aggiuntivo.
