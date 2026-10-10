@@ -1,63 +1,63 @@
 ---
 name: init
-description: Configura microtask-pipeline nel progetto corrente: rileva build/test/cartelle, propone la sezione "## Microtask config" per CLAUDE.md e crea la coda in TODO.md se manca.
+description: "Sets up microtask-pipeline in the current project: detects build/test/folders, proposes the \"## Microtask config\" section for CLAUDE.md and creates the queue in TODO.md if missing."
 disable-model-invocation: true
 ---
-# Setup microtask-pipeline
+# microtask-pipeline setup
 
-Obiettivo: scrivere la sezione `## Microtask config` nel `CLAUDE.md` del progetto, così skill `/microtask-pipeline:microtask` e hook sanno come lavorare.
+Goal: write the `## Microtask config` section in the project's `CLAUDE.md`, so the `/microtask-pipeline:microtask` skill and the hooks know how to work.
 
-## 1. Stato attuale
-- Cerca `CLAUDE.md` in root o `.claude/CLAUDE.md`.
-- Sezione `## Microtask config` già presente → mostrala e chiedi se aggiornarla. No → STOP.
-- Nessun `CLAUDE.md` → proponi di crearlo (solo intestazione + sezione config); consiglia `/init` di Claude Code per il resto.
+## 1. Current state
+- Look for `CLAUDE.md` in the root or `.claude/CLAUDE.md`.
+- `## Microtask config` section already there → show it and ask whether to update it. No → STOP.
+- No `CLAUDE.md` → offer to create it (header + config section only); suggest Claude Code's `/init` for the rest.
 
-## 2. Rileva (sola lettura)
-| Chiave | Come rilevarla |
+## 2. Detect (read only)
+| Key | How to detect it |
 |---|---|
-| `Build` | sezione **Commands** del CLAUDE.md; altrimenti `*.slnx`/`*.sln` → `dotnet build <file> -c Release`; `package.json` → script `build`; `pyproject.toml`/`Makefile`/`Cargo.toml`/`go.mod` → comando standard |
-| `Test` | sezione **Commands**; altrimenti progetti `*.Tests*`/`*Test*` → `dotnet test <solution>` se tutti i progetti di test sono nella solution, altrimenti segnala quelli esclusi e proponi di aggiungerli; `package.json` → script `test`; `pytest`, `cargo test`, `go test ./...` |
-| `Coverage` | opzionale. .NET con `Microsoft.NET.Test.Sdk` → `<Test> --collect "Code Coverage;Format=cobertura" --results-directory TestResults/coverage` (nessun pacchetto nuovo; `TestResults/` nel `.gitignore`); altri stack → comando che produce Cobertura XML, altrimenti ometti |
-| `Watch dir` | `src/` se esiste, altrimenti cartella principale del codice |
-| `Docs` | `README.md`, `CHANGELOG.md`, `docs/` — solo quelli esistenti |
+| `Build` | **Commands** section of CLAUDE.md; otherwise `*.slnx`/`*.sln` → `dotnet build <file> -c Release`; `package.json` → `build` script; `pyproject.toml`/`Makefile`/`Cargo.toml`/`go.mod` → the standard command |
+| `Test` | **Commands** section; otherwise `*.Tests*`/`*Test*` projects → `dotnet test <solution>` if every test project is in the solution, otherwise report the excluded ones and offer to add them; `package.json` → `test` script; `pytest`, `cargo test`, `go test ./...` |
+| `Coverage` | optional. .NET with `Microsoft.NET.Test.Sdk` → `<Test> --collect "Code Coverage;Format=cobertura" --results-directory TestResults/coverage` (no new package; `TestResults/` in `.gitignore`); other stacks → a command that produces Cobertura XML, otherwise omit |
+| `Watch dir` | `src/` if it exists, otherwise the main code folder |
+| `Docs` | `README.md`, `CHANGELOG.md`, `docs/` — only the existing ones |
 | `Queue` | `TODO.md` |
-| `Done` | opzionale: `DONE.md` se esiste, altrimenti ometti (task completati restano `[x]` in coda) |
-| `Branch` | `outcome_yyyyMMdd-<Group>` (`<Group>` resta letterale: la skill lo sostituisce col gruppo eseguito) |
-| `Language` | lingua di README/CHANGELOG esistenti; default English |
-| `Social drafts` | opzionale: ometti (default `off`); `on` solo se l'utente vuole bozze di post social per le feature |
+| `Done` | optional: `DONE.md` if it exists, otherwise omit (completed tasks stay `[x]` in the queue) |
+| `Branch` | `outcome_yyyyMMdd-<Group>` (`<Group>` stays literal: the skill replaces it with the group being run) |
+| `Language` | language of the existing README/CHANGELOG; default English |
+| `Social drafts` | optional: omit (default `off`); `on` only if the user wants social post drafts for features |
 
-Verifica i comandi rilevati eseguendoli **solo se** innocui e veloci (build/test); altrimenti segnala "non verificato".
+Verify the detected commands by running them **only if** harmless and fast (build/test); otherwise report "not verified".
 
-## 3. Proponi e conferma
-Mostra la sezione completa pronta da incollare:
+## 3. Propose and confirm
+Show the complete section, ready to paste:
 ```markdown
 ## Microtask config
 - Queue: TODO.md
-- Done: DONE.md        # opzionale
+- Done: DONE.md        # optional
 - Branch: outcome_yyyyMMdd-<Group>
-- Build: <comando>
-- Test: <comando>
-- Coverage: <comando>   # opzionale
+- Build: <command>
+- Test: <command>
+- Coverage: <command>   # optional
 - Watch dir: src
 - Docs: README.md, CHANGELOG.md
 - Language: English
 ```
-**⏸ Attendi conferma o correzioni.** Poi aggiungila in fondo al `CLAUDE.md` (Edit, mai sovrascrivere il file).
+**⏸ Wait for confirmation or corrections.** Then append it to the end of `CLAUDE.md` (Edit, never overwrite the file).
 
-## 4. Coda
-File `Queue` inesistente o senza tabella coda → proponi di aggiungere:
+## 4. Queue
+`Queue` file missing or without a queue table → offer to add:
 ```markdown
 ## Microtask queue
 
 | Status | ID | Group | Type | Task |
 |---|---|---|---|---|
-| [ ] | T1 | G1 | code | <primo task> |
+| [ ] | T1 | G1 | code | <first task> |
 ```
-Tipi: `code` `analysis` `docs` `content`. Stati: `[ ]` `[/]` `[x]`.
-**⏸ Attendi conferma** prima di scrivere.
+Types: `code` `analysis` `docs` `content`. Statuses: `[ ]` `[/]` `[x]`.
+**⏸ Wait for confirmation** before writing.
 
-## 5. Chiusura
-Riepiloga file modificati e ricorda:
-- da una roadmap ai task in coda: `/microtask-pipeline:plan <file roadmap>`;
-- avvio pipeline: `/microtask-pipeline:microtask` (oppure `/microtask-pipeline:microtask <ID>`);
-- l'hook Stop ora è attivo su `Watch dir`.
+## 5. Wrap-up
+Summarise the modified files and remind the user:
+- from a roadmap to queued tasks: `/microtask-pipeline:plan <roadmap file>`;
+- start the pipeline: `/microtask-pipeline:microtask` (or `/microtask-pipeline:microtask <ID>`);
+- the Stop hook is now active on `Watch dir`.

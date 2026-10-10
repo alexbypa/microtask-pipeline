@@ -1,280 +1,280 @@
 ---
 name: microtask
-description: Esegue un gruppo (o un singolo microtask) della coda microtask (TODO.md) con pipeline multi-agent: baseline → analisi SOLID → implementazione (agent o tu, in mentoring) → test → review indipendente → docs → commit di gruppo; in modalità --auto anche push e pull request.
+description: "Runs a group (or a single microtask) from the microtask queue (TODO.md) through a multi-agent pipeline: baseline → SOLID analysis → implementation (agent or you, in mentoring) → tests → independent review → docs → group commit; in --auto mode also push and pull request."
 disable-model-invocation: true
-argument-hint: "[ID task (A29) o gruppo (G0) — opzionale] [--auto | --manual] [--resume]"
+argument-hint: "[task ID (A29) or group (G0) — optional] [--auto | --manual] [--resume]"
 ---
-# Pipeline microtask
+# Microtask pipeline
 
-## Configurazione (dal CLAUDE.md del progetto)
-Cerca nel `CLAUDE.md` del progetto la sezione `## Microtask config`. Valori mancanti → default:
+## Configuration (from the project's CLAUDE.md)
+Look for the `## Microtask config` section in the project's `CLAUDE.md`. Missing values → defaults:
 
-| Chiave | Default | Uso |
+| Key | Default | Use |
 |---|---|---|
-| `Queue` | `TODO.md` | File con la tabella coda |
-| `Done` | *(assente → task completati restano `[x]` in coda)* | File archivio dei task completati: la riga si sposta qui da `Queue` |
-| `Branch` | `outcome_yyyyMMdd-<Group>` | Branch di lavoro: `yyyyMMdd` = data odierna, `<Group>` (o `<Gruppo>`) = gruppo selezionato (es. `outcome_20261002-G0`) |
-| `Build` | sezione **Commands** del CLAUDE.md | Comando build |
-| `Test` | sezione **Commands** del CLAUDE.md | Comando/i test |
-| `Coverage` | *(assente → nessuna coverage)* | Comando test che produce coverage Cobertura XML; se presente sostituisce `Test` in baseline e passo III |
-| `Watch dir` | `src` | Cartella codice sorgente (usata anche dall'hook) |
-| `Docs` | `README.md, CHANGELOG.md` | File documentazione da tenere allineati |
-| `Language` | `English` | Lingua output esterni (codice, README, CHANGELOG, commit) |
-| `Social drafts` | `off` | `on` → bozza di post social per ogni feature (passo IV, agent `social-writer`) |
+| `Queue` | `TODO.md` | File with the queue table |
+| `Done` | *(absent → completed tasks stay `[x]` in the queue)* | Archive file for completed tasks: the row moves here from `Queue` |
+| `Branch` | `outcome_yyyyMMdd-<Group>` | Working branch: `yyyyMMdd` = today's date, `<Group>` (or `<Gruppo>`) = selected group (e.g. `outcome_20261002-G0`) |
+| `Build` | **Commands** section of CLAUDE.md | Build command |
+| `Test` | **Commands** section of CLAUDE.md | Test command(s) |
+| `Coverage` | *(absent → no coverage)* | Test command that produces Cobertura XML coverage; when set it replaces `Test` in the baseline and step III |
+| `Watch dir` | `src` | Source code folder (also used by the hook) |
+| `Docs` | `README.md, CHANGELOG.md` | Documentation files to keep in sync |
+| `Language` | `English` | Language of external output (code, README, CHANGELOG, commits) |
+| `Social drafts` | `off` | `on` → a social post draft for every feature (step IV, `social-writer` agent) |
 
-Build o Test non trovati → chiedimeli una volta e proponi di aggiungerli al CLAUDE.md.
+Build or Test not found → ask the user once and offer to add them to CLAUDE.md.
 
-## Formato coda
-Tabella nel file `Queue`:
-`| Status | ID | Group | Type | Task |` — Status: `[ ]` `[/]` `[x]` · Type: `code` `analysis` `docs` `content`. Le intestazioni possono essere in qualunque lingua (es. `| Stato | ID | Gruppo | Tipo | Task |`): contano l'ordine delle colonne e i valori di Status e Type.
+## Queue format
+Table in the `Queue` file:
+`| Status | ID | Group | Type | Task |` — Status: `[ ]` `[/]` `[x]` · Type: `code` `analysis` `docs` `content`. Headers may be in any language (e.g. `| Stato | ID | Gruppo | Tipo | Task |`): what matters is the column order and the Status and Type values.
 
-## Regole
-- Nella pipeline **un microtask alla volta**; **commit a fine gruppo**.
-- Branch `Branch`, **prima della baseline** (dopo la selezione, così il gruppo è noto):
-  - modifiche non committate nel working tree → STOP e chiedi (non mescolarle al gruppo). Eccezioni: i file `Queue` e `Done` (es. righe aggiunte da `/microtask-pipeline:plan` o il `[/]` della selezione) non contano ed entrano nel commit del gruppo; con `--resume` le modifiche sono il codice dell'utente, vedi "Ripresa";
-  - branch esistente e **non** mergiato nel branch di default → `git switch` e riusalo;
-  - altrimenti → `git fetch origin` e `git switch -c <Branch> origin/<branch di default>`; se il nome esiste già (mergiato) aggiungi `-2`, `-3`…
-- Max **2 giri** review → fix per microtask, poi STOP e chiedi (vale anche quando i fix li fa l'utente, in mentoring).
-- Mai pubblicare su servizi esterni (tranne la review LLM della PR, se attiva: il diff va al provider configurato): i task `content` e le bozze social (`outcomes/social/`) restano bozze.
-- Regole del progetto in `.claude/rules/` (se esistono) valgono per tutti gli agent: passale nei prompt.
-- Lingue.
-  - **Lingua del task** = quella del testo della colonna Task delle righe selezionate (lingue miste → quella della maggioranza delle righe; a parità, quella della prima). Il comando di solito arriva senza altro testo: la lingua si capisce da qui, non dal prompt.
-  - **Lingua della conversazione** = quella dei messaggi che l'utente scrive a parole; finché ha lanciato solo il comando, è la lingua del task.
-  - Report a me, frasi fisse (righe dei gate, `Bozza social: …`, `⚠ CI non verificata…`) e file in `outcomes/microtask/`: lingua della conversazione. Le frasi fisse sono scritte qui in italiano: traducile mantenendo il significato.
-  - Output esterni (codice, README, CHANGELOG, commit message): `Language`.
-  - **Lingua della PR** (body, commenti, review LLM): la lingua del task.
-  - Titolo PR = prima riga del commit message, resta com'è; comandi, path, nomi di tipi/metodi e codice restano invariati.
-- I subagent girano in background: mentre aspetti, chiudi il turno con **una riga** (passo in corso), niente riepiloghi intermedi.
-- Marker pipeline: all'avvio `touch "$(git rev-parse --git-dir)/microtask-active"`; a ogni STOP (fine gruppo o blocco) `rm -f` dello stesso file. Col marker l'hook Stop doc-sync tace: doc-sync è già nel passo IV.
+## Rules
+- In the pipeline, **one microtask at a time**; **commit at the end of the group**.
+- Branch `Branch`, **before the baseline** (after selection, so the group is known):
+  - uncommitted changes in the working tree → STOP and ask (don't mix them into the group). Exceptions: the `Queue` and `Done` files (e.g. rows added by `/microtask-pipeline:plan` or the selection's `[/]`) don't count and go into the group commit; with `--resume` the changes are the user's code, see "Resume";
+  - branch exists and is **not** merged into the default branch → `git switch` and reuse it;
+  - otherwise → `git fetch origin` and `git switch -c <Branch> origin/<default branch>`; if the name already exists (merged) append `-2`, `-3`…
+- Max **2 rounds** of review → fix per microtask, then STOP and ask (also when the user makes the fixes, in mentoring).
+- Never publish to external services (except the LLM PR review, when enabled: the diff goes to the configured provider): `content` tasks and social drafts (`outcomes/social/`) stay drafts.
+- Project rules in `.claude/rules/` (if any) apply to every agent: pass them in the prompts.
+- Languages.
+  - **Task language** = the language of the Task column text in the selected rows (mixed languages → the majority of rows; on a tie, the first row's). The command usually arrives with no other text: the language comes from here, not from the prompt.
+  - **Conversation language** = the language of the messages the user writes in words; as long as they've only launched the command, it's the task language.
+  - Reports to the user, fixed phrases (gate lines, `Social draft: …`, `⚠ CI not verified…`) and files in `outcomes/microtask/`: conversation language. Fixed phrases are written here in English: translate them, keeping the meaning.
+  - External output (code, README, CHANGELOG, commit message): `Language`.
+  - **PR language** (body, comments, LLM review): the task language.
+  - PR title = first line of the commit message, unchanged; commands, paths, type/method names and code stay unchanged.
+- Subagents run in the background: while you wait, end the turn with **one line** (current step), no intermediate summaries.
+- Pipeline marker: at startup `touch "$(git rev-parse --git-dir)/microtask-active"`; at every STOP (end of group or block) `rm -f` the same file. While the marker exists the doc-sync Stop hook stays quiet: doc-sync is already part of step IV.
 
-## Selezione
-Da `$ARGUMENTS` (token separati da spazi; `--auto` / `--manual` sono la modalità, vedi sotto):
+## Selection
+From `$ARGUMENTS` (space-separated tokens; `--auto` / `--manual` are the mode, see below):
 
-| Argomento | Cosa esegue |
+| Argument | What runs |
 |---|---|
-| ID di un **task** (es. `A29`, colonna ID) | Solo quel microtask, poi "Fine gruppo" e STOP |
-| ID di un **gruppo** (es. `G0`, colonna Group) | Tutti i `[ ]` di quel gruppo, nell'ordine delle righe, poi "Fine gruppo" e STOP |
-| nessuno | Primo `[ ]` **dall'alto** (posizione della riga, non nome del gruppo) → il suo Gruppo, come sopra |
+| ID of a **task** (e.g. `A29`, ID column) | Only that microtask, then "End of group" and STOP |
+| ID of a **group** (e.g. `G0`, Group column) | Every `[ ]` of that group, in row order, then "End of group" and STOP |
+| none | First `[ ]` **from the top** (row position, not group name) → its Group, as above |
 
-ID non trovato, o gruppo senza `[ ]` → dillo e fermati. Segna `[/]` nella coda il microtask in corso.
+ID not found, or group with no `[ ]` → say so and stop. Mark the running microtask `[/]` in the queue.
 
-`--resume` (con o senza ID) non seleziona righe `[ ]`: riprende il microtask `[/]` fermo in mentoring (vedi "Ripresa"). Senza ID → la riga `[/]` della coda; nessuna `[/]`, più di una, o `outcomes/microtask/<ID>-plan.md` assente → dillo e fermati.
+`--resume` (with or without ID) doesn't select `[ ]` rows: it resumes the `[/]` microtask paused in mentoring (see "Resume"). No ID → the queue's `[/]` row; no `[/]`, more than one, or `outcomes/microtask/<ID>-plan.md` missing → say so and stop.
 
-## Introduzione (primo output, prima di qualsiasi domanda)
-**Ordine di avvio obbligatorio:** selezione → introduzione → domanda "procedo?" → domanda implementatore (obbligatoria se il gruppo ha un task `code`) → domanda modalità (solo senza flag) → branch → baseline. Mai chiedere la modalità prima dell'introduzione. Con `--resume` niente introduzione né domande: vai a "Ripresa".
+## Introduction (first output, before any question)
+**Mandatory startup order:** selection → introduction → "proceed?" question → code-author question (mandatory if the group has a `code` task) → mode question (only without a flag) → branch → baseline. Never ask for the mode before the introduction. With `--resume` no introduction and no questions: go to "Resume".
 
-Fonti: righe della coda selezionate, codice che toccano (lettura veloce, niente agent), obiettivi del `CLAUDE.md` del progetto (es. sezione **Obiettivi**). Lingua della conversazione, frasi brevi, niente giri di parole. Usa **esattamente** questo formato (markdown, non un paragrafo unico):
+Sources: selected queue rows, the code they touch (quick read, no agent), goals in the project's `CLAUDE.md` (e.g. a **Goals** section). Conversation language, short sentences, no padding. Use **exactly** this format (markdown, not a single paragraph):
 
 ```markdown
-## <Gruppo> — <titolo breve>
+## <Group> — <short title>
 
-### 1. Rischio sul codice: 🟢 Basso | 🟡 Medio | 🔴 Alto
-<1-2 righe: perché (API pubblica, file centrali, assenza di test, CI/build toccati, possibili bug che emergono)>
+### 1. Risk to the code: 🟢 Low | 🟡 Medium | 🔴 High
+<1-2 lines: why (public API, core files, missing tests, CI/build touched, bugs that may surface)>
 
-### 2. Cosa faremo
-| ID | Cosa cambia (in parole semplici) |
+### 2. What we'll do
+| ID | What changes (in plain words) |
 |---|---|
-| <ID> | <una riga> |
+| <ID> | <one line> |
 
-### 3. Impatto su <obiettivo del CLAUDE.md, es. "download NuGet">: ⬆️ Alto | ↗️ Medio | ➖ Basso/nessuno
-<2-3 righe concrete: cosa vede in più chi valuta o usa il pacchetto (affidabilità, feature, docs, badge, README…) e perché sposta l'obiettivo. Impatto indiretto (es. solo test) → dillo e spiega il legame.>
+### 3. Impact on <CLAUDE.md goal, e.g. "NuGet downloads">: ⬆️ High | ↗️ Medium | ➖ Low/none
+<2-3 concrete lines: what someone evaluating or using the package gets (reliability, features, docs, badges, README…) and why it moves the goal. Indirect impact (e.g. tests only) → say so and explain the link.>
 
-_Stima pre-analisi: il piano del passo I può correggerla._
+_Pre-analysis estimate: the step I plan may correct it._
 ```
-Sezione 3 obbligatoria anche con impatto basso. `CLAUDE.md` senza obiettivi → "Impatto su chi usa il codice".
+Section 3 is mandatory even with low impact. `CLAUDE.md` without goals → "Impact on people using the code".
 
-Subito dopo, **una sola** chiamata `AskUserQuestion` con le seguenti domande sequenziali:
-1. "Procedo con <Gruppo>?" → `Procedi` / `Fermati` (Fermati → rimuovi `[/]`, STOP).
-2. "Chi scrive il codice di produzione?" → `Me (mentoring)` / `Agent + Senior questions` / `Agent`. **Obbligatoria** se il gruppo ha almeno un task `code`: si fa sempre, anche in `--auto`, e nessuna config la salta (gruppi solo `analysis`/`docs`/`content` → niente domanda). Metti per prima, con `(consigliato)`, l'opzione suggerita dalla regola `.claude/rules/mentoring-mode.md` se il progetto ce l'ha, altrimenti da questi criteri: `Me (mentoring)` per feature e decisioni architetturali (nuovo file, interfaccia, endpoint, progetto, cambio di layer, area mai toccata dall'utente); `Agent` per fix su codice esistente, refactor meccanici, task sotto le 5 righe senza nuove astrazioni, config, docs. Nella descrizione dell'opzione consigliata, una riga sul perché. Vale per tutto il gruppo; i test li scrive sempre `test-runner`.
-   `Agent + Senior questions` = scrive l'agent, poi lo Step 3 sul suo codice (vedi "Step 3"). Etichette delle opzioni tradotte nella lingua della conversazione (es. in italiano `Io (mentoring)` / `Agent + domande da Senior` / `Agent`). Opzioni sempre tutte e tre in questa domanda: le domande di una `AskUserQuestion` arrivano insieme (max 4), quindi niente domande che dipendono dalla risposta a un'altra.
-3. Solo senza `--auto`/`--manual`: "Modalità?" → `Manuale` / `Auto`, una riga ciascuna su cosa comporta (vedi sotto).
-4. Solo senza `--manual` e se la review LLM è configurata: "Dopo la PR, chiedo a <modello @ host> una review pubblicata come commento? (vale solo in Auto)" → `Sì` / `No`.
+Right after, **a single** `AskUserQuestion` call with these sequential questions:
+1. "Proceed with <Group>?" → `Proceed` / `Stop` (Stop → remove `[/]`, STOP).
+2. "Who writes the production code?" → `Me (mentoring)` / `Agent + Senior questions` / `Agent`. **Mandatory** if the group has at least one `code` task: always asked, even in `--auto`, and no config skips it (groups with only `analysis`/`docs`/`content` → no question). Put first, marked `(recommended)`, the option suggested by the project rule `.claude/rules/mentoring-mode.md` if the project has one, otherwise by these criteria: `Me (mentoring)` for features and architectural decisions (new file, interface, endpoint, project, layer change, an area the user has never touched); `Agent` for fixes to existing code, mechanical refactors, tasks under 5 lines with no new abstractions, config, docs. In the recommended option's description, one line on why. It applies to the whole group; tests are always written by `test-runner`.
+   `Agent + Senior questions` = the agent writes the code, then Step 3 on its code (see "Step 3"). Option labels are translated into the conversation language (e.g. in Italian `Io (mentoring)` / `Agent + domande da Senior` / `Agent`). Always all three options in this question: the questions of one `AskUserQuestion` arrive together (max 4), so no question may depend on the answer to another.
+3. Only without `--auto`/`--manual`: "Mode?" → `Manual` / `Auto`, one line each on what it means (see below).
+4. Only without `--manual` and if the LLM review is configured: "After the PR, should I ask <model @ host> for a review posted as a comment? (Auto only)" → `Yes` / `No`.
 
-Prima della `AskUserQuestion` lancia `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" --check` (legge l'ambiente e il `.env` del progetto, non stampa la chiave): exit 0 → configurata, la riga stampata dà `<modello @ host>` per la domanda 4; altrimenti niente domanda 4, review disattivata, e scrivi la riga stampata (`Review LLM non configurata: ...`).
+Before the `AskUserQuestion` run `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" --check` (reads the environment and the project's `.env`, never prints the key): exit 0 → configured, the printed line gives `<model @ host>` for question 4; otherwise no question 4, review disabled, and write the printed line (`LLM review not configured: ...`).
 
-## Modalità
-- `--manual` → si ferma ai gate (⏸ GATE 1, ⏸ GATE 2) e attende la mia approvazione. Nessun push.
-- `--auto` → nessuna attesa ai gate: decidi tu e annota nel report (`GATE n: auto-approvato` + motivo). A fine gruppo commit, push e pull request (passo 4 di "Fine gruppo"). In mentoring gli stop di II-user, dei fix review e dello Step 3 restano; senza codice e risposte dell'utente non si va avanti. Con `Agent + Senior questions` lo Step 3 non si ferma: le domande arrivano a fine gruppo. La modalità è salvata nel piano e vale anche dopo `--resume`.
-- Nessuno dei due → la modalità è la terza domanda dell'Introduzione.
+## Modes
+- `--manual` → stops at the gates (⏸ GATE 1, ⏸ GATE 2) and waits for the user's approval. No push.
+- `--auto` → no waiting at the gates: decide yourself and log it in the report (`GATE n: auto-approved` + reason). At the end of the group commit, push and pull request (step 4 of "End of group"). In mentoring the stops at II-user, review fixes and Step 3 remain; without the user's code and answers nothing moves on. With `Agent + Senior questions` Step 3 doesn't stop: the questions come at the end of the group. The mode is saved in the plan and still applies after `--resume`.
+- Neither → the mode is the third question of the Introduction.
 
-**STOP anche in `--auto`** (fermati, spiega, attendi):
-- 🔴 ancora presenti dopo i 2 giri review → fix;
-- build o test rossi **non preesistenti** alla baseline;
-- `implementer` o `test-runner` segnalano una modifica fuori piano o un bug di produzione;
-- breaking change (piano I) o bump `major` suggerito (review V);
-- push o `gh` falliscono (passo 4).
+**STOP even in `--auto`** (stop, explain, wait):
+- 🔴 still present after the 2 review → fix rounds;
+- build or tests red that were **not already red** at baseline;
+- `implementer` or `test-runner` report an out-of-plan change or a production bug;
+- breaking change (plan I) or suggested `major` bump (review V);
+- push or `gh` fail (step 4).
 
-🟡 grande o fuori scope in `--auto`: niente STOP, diventa follow-up in coda (passo IV) e va nelle Note della PR.
-Le richieste di permesso di Claude Code (es. `git push`, `gh pr create`) non dipendono dalla modalità: le governa il `settings.json` del progetto.
+Large or out-of-scope 🟡 in `--auto`: no STOP, it becomes a follow-up in the queue (step IV) and goes in the PR Notes.
+Claude Code permission prompts (e.g. `git push`, `gh pr create`) don't depend on the mode: the project's `settings.json` governs them.
 
-## Passi per tipo
-| Tipo | Passi |
+## Steps by type
+| Type | Steps |
 |---|---|
 | `code` | 0 → I → ⏸G1 → II → III → V → IV |
-| `code` con `Agent + Senior questions` | 0 → I → ⏸G1 → II → III → V → Step 3 (solo domande, nessuno stop) → IV |
+| `code` with `Agent + Senior questions` | 0 → I → ⏸G1 → II → III → V → Step 3 (questions only, no stop) → IV |
 | `code` in mentoring | 0 → I → ⏸G1 → II-user (⏸ STOP) · `--resume` → III → V → ⏸ Step 3 → IV |
 | `analysis` | 0 → I → report in `outcomes/audits/<ID>.md` → IV |
-| `docs` | I (solo impatto) → ⏸G1 → IV → doc-sync |
-| `content` | bozza in `outcomes/content/<ID>.md` → ⏸G1 → IV |
+| `docs` | I (impact only) → ⏸G1 → IV → doc-sync |
+| `content` | draft in `outcomes/content/<ID>.md` → ⏸G1 → IV |
 
-**Corsia veloce** (solo `code`, se il piano I dice `Corsia: veloce`): II (solo con implementatore `Agent`; in mentoring resta II-user), III e IV li esegui **tu** senza subagent, con le stesse regole degli agent (build completa, conteggio warning, test verdi, coda/CHANGELOG/Docs). Restano agent: I (analisi) e V (review indipendente). Al GATE 1 mostra la corsia: io posso chiedere la completa.
+**Fast lane** (`code` only, if plan I says `Lane: fast`): II (only with the `Agent` implementer; in mentoring II-user remains), III and IV are run **by you** without subagents, with the same rules as the agents (full build, warning count, green tests, queue/CHANGELOG/Docs). Still agents: I (analysis) and V (independent review). At GATE 1 show the lane: the user can ask for the full one.
 
-### 0. Baseline (una volta per gruppo)
-Esegui `Build` **completa** (non incrementale: .NET `--no-incremental`, altri stack clean prima) + `Test`, oppure **`Coverage` se configurato** (obbligatorio, anche in corsia veloce: mai `Test` al suo posto). Annota errori, **numero di warning**, fallimenti **preesistenti** (non sono regressioni) e, con `Coverage`, la **line coverage globale di produzione** (stesse regole di `test-runner`).
-`Coverage` configurato ma nessun report Cobertura prodotto o leggibile → rilancia una volta; ancora niente → STOP (anche in `--auto`): senza baseline non si può confrontare.
-Copertura: ogni progetto di test del repo deve essere eseguito da `Test` (.NET: ogni `*Tests*.csproj` nella solution usata, o elencato). Progetti esclusi → segnalali nel piano del GATE 1.
+### 0. Baseline (once per group)
+Run a **full** `Build` (not incremental: .NET `--no-incremental`, other stacks clean first) + `Test`, or **`Coverage` if configured** (mandatory, fast lane included: never `Test` in its place). Record errors, **warning count**, **pre-existing** failures (not regressions) and, with `Coverage`, the **global production line coverage** (same rules as `test-runner`).
+`Coverage` configured but no Cobertura report produced or readable → run it once more; still nothing → STOP (even in `--auto`): without a baseline there is nothing to compare against.
+Coverage of test projects: every test project in the repo must be run by `Test` (.NET: every `*Tests*.csproj` in the solution used, or listed). Excluded projects → flag them in the GATE 1 plan.
 
-### I. Analisi → agent `microtask-pipeline:solid-analyst`
-Passa: testo microtask, baseline, config. Ricevi: piano (spiegazione semplice se fix, file, SOLID, rischio, breaking, snapshot API pubblica, test).
-**⏸ GATE 1:** se il microtask è un fix, mostra **prima** la "Spiegazione semplice" (problema → perché → come lo risolviamo), nella lingua della conversazione; poi il piano. Attendi approvazione.
-Solo con `Social drafts: on`: subito sotto il piano (anche in `--auto` e in corsia veloce), una riga da sola, fuori da tabelle ed elenchi:
-- `Natura: feature` → `Bozza social: la creo al passo IV (outcomes/social/<ID>.md)`
-- altrimenti → `Il task <ID> non è una feature quindi non creo la bozza del post social`
-In `--auto`: mostra lo stesso testo e prosegui (salvo casi STOP). Spiegazione semplice e piano servono anche al body della PR.
+### I. Analysis → agent `microtask-pipeline:solid-analyst`
+Pass: microtask text, baseline, config. Receive: plan (plain explanation if a fix, files, SOLID, risk, breaking, public API snapshot, tests).
+**⏸ GATE 1:** if the microtask is a fix, show the "Plain explanation" **first** (problem → why → how we fix it), in the conversation language; then the plan. Wait for approval.
+Only with `Social drafts: on`: right below the plan (also in `--auto` and in the fast lane), one line on its own, outside tables and lists:
+- `Nature: feature` → `Social draft: I'll create it at step IV (outcomes/social/<ID>.md)`
+- otherwise → `Task <ID> is not a feature, so no social post draft`
+In `--auto`: show the same text and carry on (except STOP cases). The plain explanation and the plan also feed the PR body.
 
-### II. Implementazione → agent `microtask-pipeline:implementer`
-Passa: piano approvato + comando `Build`. Riporta solo errori: la sua build è incrementale, i warning non sono affidabili.
+### II. Implementation → agent `microtask-pipeline:implementer`
+Pass: approved plan + `Build` command. Report errors only: its build is incremental, warnings aren't reliable.
 
-### II-user. Mentoring: il codice lo scrive l'utente
-Al posto dell'agent `implementer`. Il passo I ha già fatto lo "Step 1" di `mentoring-mode` (overview logica, nessun codice) ed è stato approvato al GATE 1.
-1. **Step 2, firme.** Mostra **solo** le firme: interfacce, classi, record, metodi pubblici **senza body**, con il file in cui va ciascuna, e 2-4 righe su come si integrano nell'architettura esistente. Elenca i casi che `test-runner` coprirà. Niente implementazione, neanche parziale.
-2. **Salva** `outcomes/microtask/<ID>-plan.md` (lingua della conversazione), unica fonte per la ripresa:
-   - piano approvato del passo I (snapshot API pubblica, Corsia, Natura inclusi) e firme dello Step 2;
-   - baseline del passo 0 (build, numero warning, test, fallimenti preesistenti, coverage se configurata) e `git rev-parse HEAD` su cui è stata presa;
-   - Branch, modalità (`--auto`/`--manual`), scelta della review LLM;
-   - sezione **Prossima sessione** (formato in "Fine gruppo") con comando `/microtask-pipeline:microtask <ID> --resume`.
-3. **⏸ STOP** (anche in `--auto`): chiedi all'utente di sfidare il design e poi di scrivere il codice; mostra il comando di ripresa. Rimuovi il marker pipeline; la riga resta `[/]`. Se l'utente cambia le firme, aggiorna `<ID>-plan.md` prima di fermarti.
+### II-user. Mentoring: the user writes the code
+Instead of the `implementer` agent. Step I has already done "Step 1" of `mentoring-mode` (logical overview, no code), approved at GATE 1.
+1. **Step 2, signatures.** Show **only** the signatures: interfaces, classes, records, public methods **without bodies**, with the file each one goes in, and 2-4 lines on how they fit the existing architecture. List the cases `test-runner` will cover. No implementation, not even partial.
+2. **Save** `outcomes/microtask/<ID>-plan.md` (conversation language), the single source for resuming:
+   - approved plan from step I (public API snapshot, Lane, Nature included) and the Step 2 signatures;
+   - step 0 baseline (build, warning count, tests, pre-existing failures, coverage if configured) and the `git rev-parse HEAD` it was taken on;
+   - Branch, mode (`--auto`/`--manual`), LLM review choice;
+   - a **Next session** section (format in "End of group") with the command `/microtask-pipeline:microtask <ID> --resume`.
+3. **⏸ STOP** (even in `--auto`): ask the user to challenge the design and then write the code; show the resume command. Remove the pipeline marker; the row stays `[/]`. If the user changes the signatures, update `<ID>-plan.md` before stopping.
 
-Altri microtask `code` nello stesso gruppo: ognuno si ferma al proprio II-user dopo il `--resume` del precedente; i microtask `analysis`/`docs`/`content` del gruppo si eseguono dopo l'ultimo, prima di "Fine gruppo".
+Other `code` microtasks in the same group: each one stops at its own II-user after the previous one's `--resume`; the group's `analysis`/`docs`/`content` microtasks run after the last one, before "End of group".
 
-### Ripresa (`--resume`)
-1. Leggi **solo** `outcomes/microtask/<ID>-plan.md`, la riga di coda e i file cambiati: niente nuova analisi.
-2. `touch` del marker pipeline; `git switch` sul Branch salvato se serve.
-3. `git status --short`: le modifiche non committate sono il codice dell'utente, nessuno STOP. File fuori dal piano → elencali e chiedi se includerli (in `--auto`: escludili e annotalo).
-4. HEAD diverso da quello salvato (es. merge del branch di default) → avvisa che la baseline potrebbe non essere più confrontabile e proponi di rifarla con `git stash` → passo 0 → `git stash pop` (in `--auto`: rifalla).
-5. Prosegui da dove si era fermato (III dopo II-user, III e V dopo un giro di fix) con baseline e snapshot API salvati.
+### Resume (`--resume`)
+1. Read **only** `outcomes/microtask/<ID>-plan.md`, the queue row and the changed files: no new analysis.
+2. `touch` the pipeline marker; `git switch` to the saved Branch if needed.
+3. `git status --short`: uncommitted changes are the user's code, no STOP. Files outside the plan → list them and ask whether to include them (in `--auto`: exclude them and log it).
+4. HEAD differs from the saved one (e.g. default branch merged in) → warn that the baseline may no longer be comparable and offer to redo it with `git stash` → step 0 → `git stash pop` (in `--auto`: redo it).
+5. Continue from where it stopped (III after II-user, III and V after a fix round) with the saved baseline and API snapshot.
 
-### III. Test → agent `microtask-pipeline:test-runner`
-Passa: piano + riepilogo implementer (in mentoring: file cambiati dall'utente, da `git status --short`) + comandi `Build`/`Test`/`Coverage` + warning della baseline. Deve chiudere verde, con build completa e confronto warning (nuovi warning = finding).
-Con `Coverage` (obbligatorio anche in corsia veloce):
-- righe di produzione modificate e non coperte = finding 🟡, gestito come i findings di V (salvo motivazione "non testabile" accettata al GATE 2);
-- **mai peggiorare**: coverage globale di produzione sotto la baseline = finding 🟡, stessa gestione;
-- coverage mancante a fine passo = errore, non `n/a`: rilancia `Coverage`.
+### III. Tests → agent `microtask-pipeline:test-runner`
+Pass: plan + implementer summary (in mentoring: files changed by the user, from `git status --short`) + `Build`/`Test`/`Coverage` commands + baseline warnings. Must finish green, with a full build and a warning comparison (new warnings = finding).
+With `Coverage` (mandatory, fast lane included):
+- changed production lines not covered = 🟡 finding, handled like V findings (unless an "untestable" justification is accepted at GATE 2);
+- **never worse**: global production coverage below the baseline = 🟡 finding, same handling;
+- coverage missing at the end of the step = error, not `n/a`: run `Coverage` again.
 
 ### V. Review → agent `microtask-pipeline:reviewer`
-Passa: snapshot API del passo I (**non** il piano). Ricevi: problemi + diff API + bump suggerito.
-Gestione findings:
+Pass: the step I API snapshot (**not** the plan). Receive: issues + API diff + suggested bump.
+Handling findings:
 
-| Gravità | Azione |
+| Severity | Action |
 |---|---|
-| 🔴 | Torna a II con i findings (max 2 giri) |
-| 🟡 piccolo: ≤10 righe, file già toccati dal microtask, nessun cambio API | Corretto nello stesso giro dei 🔴 (nessun 🔴 → un giro solo per loro, conta nei 2) |
-| 🟡 grande o fuori scope | Proposto al GATE 2; se rifiutato → follow-up in coda (passo IV) |
-| ⚪ | Solo nel report, nessuna azione |
+| 🔴 | Back to II with the findings (max 2 rounds) |
+| Small 🟡: ≤10 lines, files already touched by the microtask, no API change | Fixed in the same round as the 🔴 (no 🔴 → one round just for them, counts toward the 2) |
+| Large or out-of-scope 🟡 | Proposed at GATE 2; if rejected → follow-up in the queue (step IV) |
+| ⚪ | Report only, no action |
 
-Dopo ogni giro di fix → rilancia III (build completa + test) prima di chiudere.
+After each fix round → run III again (full build + tests) before closing.
 
-In mentoring i fix dei 🔴 e dei 🟡 piccoli li fa l'utente: mostra i findings con `file:riga` e il fix proposto **a parole** (niente codice), annotali in `<ID>-plan.md` con il numero del giro, rimuovi il marker pipeline, poi ⏸ STOP con `/microtask-pipeline:microtask <ID> --resume`.
+In mentoring the user fixes the 🔴 and small 🟡: show the findings with `file:line` and the proposed fix **in words** (no code), log them in `<ID>-plan.md` with the round number, remove the pipeline marker, then ⏸ STOP with `/microtask-pipeline:microtask <ID> --resume`.
 
-### Step 3. Domande da Senior (mentoring, o `Agent + Senior questions`)
-Dopo V senza 🔴: 4-5 domande da Senior .NET Developer sul codice del microtask (trade-off, GC e allocazioni, performance, concorrenza, edge case), ognuna ancorata a `file:riga`.
-- In mentoring il codice è dell'utente: le domande mettono alla prova le sue scelte. ⏸ Attendi le risposte (anche in `--auto`), poi commentale in 1-2 righe ciascuna. Domande, risposte e commenti vanno in `<ID>-plan.md` sotto `## Step 3`. Poi passo IV.
-- Con `Agent` il codice è dell'agent: le domande verificano che l'utente abbia capito il perché delle sue scelte (es. "perché X invece di Y?", "cosa succede se…?"). **Nessuno stop**: scrivi solo le domande nel report di gruppo sotto `## Step 3 — <ID>` e passa subito al passo IV. Le mostri a fine gruppo (punto 5 di "Fine gruppo").
+### Step 3. Senior questions (mentoring, or `Agent + Senior questions`)
+After V with no 🔴: 4-5 Senior .NET Developer questions on the microtask's code (trade-offs, GC and allocations, performance, concurrency, edge cases), each anchored to `file:line`.
+- In mentoring the code is the user's: the questions challenge their choices. ⏸ Wait for the answers (even in `--auto`), then comment on each in 1-2 lines. Questions, answers and comments go in `<ID>-plan.md` under `## Step 3`. Then step IV.
+- With `Agent` the code is the agent's: the questions check that the user understood the reasons behind its choices (e.g. "why X instead of Y?", "what happens if…?"). **No stop**: just write the questions in the group report under `## Step 3 — <ID>` and move straight to step IV. You show them at the end of the group (point 5 of "End of group").
 
-### IV. Memoria → agent `microtask-pipeline:memory-updater`, poi `microtask-pipeline:doc-sync-reviewer`
-Passa: config (`Queue`, `Done`, `Docs`, `Language`) + findings rimandati da trasformare in follow-up. Aggiorna coda (`[x]` + nota, oppure riga spostata in `Done`), CHANGELOG `## [Unreleased]`, `Docs`.
-Solo con `Social drafts: on` e solo `code` con piano I `Natura: feature` → **in parallelo** a `memory-updater` lancia l'agent `microtask-pipeline:social-writer` (anche in corsia veloce). Passa: ID e testo microtask, Obiettivo e piano I, riepiloghi di implementer e test-runner, diff API di V. Scrive solo la bozza inglese `outcomes/social/<ID>.md`, mai pubblicata; entra nel commit del gruppo. Errore dell'agent → annotalo nel report, nessuno STOP.
-Con `Social drafts: on`, ogni altro microtask (Natura `fix`/`altro`, o Tipo diverso da `code`) → niente agent; la riga `Il task <ID> non è una feature quindi non creo la bozza del post social` è già al GATE 1 (Tipo senza passo I: scrivila qui) e torna al GATE 2. Con `off` (default) niente agent e niente righe sulle bozze social.
-Dopo doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (evita che l'hook Stop lo rilanci).
+### IV. Memory → agent `microtask-pipeline:memory-updater`, then `microtask-pipeline:doc-sync-reviewer`
+Pass: config (`Queue`, `Done`, `Docs`, `Language`) + deferred findings to turn into follow-ups. Updates the queue (`[x]` + note, or row moved to `Done`), CHANGELOG `## [Unreleased]`, `Docs`.
+Only with `Social drafts: on` and only `code` with plan I `Nature: feature` → **in parallel** with `memory-updater` launch the `microtask-pipeline:social-writer` agent (fast lane included). Pass: microtask ID and text, Goal and plan I, implementer and test-runner summaries, V's API diff. It writes only the English draft `outcomes/social/<ID>.md`, never published; it goes into the group commit. Agent error → log it in the report, no STOP.
+With `Social drafts: on`, every other microtask (Nature `fix`/`other`, or Type other than `code`) → no agent; the line `Task <ID> is not a feature, so no social post draft` is already at GATE 1 (Types with no step I: write it here) and comes back at GATE 2. With `off` (default) no agent and no social draft lines.
+After doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` (stops the Stop hook from running it again).
 
-## Fine gruppo
-1. **Report** in `outcomes/microtask/<yyyy-MM-dd>-<Gruppo>.md` (lingua della conversazione):
-   - baseline → finale (build, warning, test; con `Coverage`: line coverage globale e righe modificate coperte N/M);
-   - per microtask: fatto, decisioni ai gate, deviazioni dal piano;
-   - findings review: risolti / rimandati;
-   - task follow-up aggiunti alla coda;
-   - bozze social (solo con `Social drafts: on`): create (`outcomes/social/<ID>.md`), oppure le righe "non è una feature" del GATE 2;
-   - da verificare dopo (es. CI al primo push);
-   - bump suggerito;
-   - in mentoring: link a `outcomes/microtask/<ID>-plan.md` per microtask;
-   - con `Agent + Senior questions`: sezioni `## Step 3 — <ID>` con le sole domande (vedi "Step 3");
-   - **Prossima sessione**, ultima sezione, sempre, autosufficiente per ripartire a contesto vuoto:
+## End of group
+1. **Report** in `outcomes/microtask/<yyyy-MM-dd>-<Group>.md` (conversation language):
+   - baseline → final (build, warnings, tests; with `Coverage`: global line coverage and changed lines covered N/M);
+   - per microtask: what was done, gate decisions, deviations from the plan;
+   - review findings: resolved / deferred;
+   - follow-up tasks added to the queue;
+   - social drafts (only with `Social drafts: on`): created (`outcomes/social/<ID>.md`), or the GATE 2 "not a feature" lines;
+   - to check later (e.g. CI on the first push);
+   - suggested bump;
+   - in mentoring: link to `outcomes/microtask/<ID>-plan.md` per microtask;
+   - with `Agent + Senior questions`: `## Step 3 — <ID>` sections with the questions only (see "Step 3");
+   - **Next session**, last section, always, self-contained to restart from an empty context:
      ```markdown
-     ## Prossima sessione
-     - **Comando:** /microtask-pipeline:microtask <prossimo ID o gruppo> --manual
-     - **Prossimo in coda:** <ID> — <task> (<tipo>)
-     - **Decisioni da portarsi dietro:** <dai gate e dallo Step 3, max 3 righe>
-     - **Follow-up aperti:** <ID aggiunti in coda>
-     - **Da leggere prima:** <file del perimetro del prossimo task, se noti>
+     ## Next session
+     - **Command:** /microtask-pipeline:microtask <next ID or group> --manual
+     - **Next in queue:** <ID> — <task> (<type>)
+     - **Decisions to carry over:** <from the gates and Step 3, max 3 lines>
+     - **Open follow-ups:** <IDs added to the queue>
+     - **Read first:** <files in the next task's scope, if known>
      ```
-     Coda vuota → `**Comando:** nessuno, coda esaurita`.
-2. **File del commit**: elenco esplicito dei file toccati dal gruppo (dai riepiloghi dei passi + coda, `Done`, CHANGELOG, Docs, report, bozze social, `<ID>-plan.md` in mentoring). Confrontalo con `git status --short`: il resto va in "esclusi".
-3. **⏸ GATE 2:** mostra `git diff --stat -- <file del commit>` + i file nuovi (non compaiono nel diff), i file esclusi, link al report, bump suggerito, commit message (conventional, in `Language`, con il trailer `Co-Authored-By` di Claude Code: l'attribuzione AI resta visibile, non toglierlo; se manca aggiungi `Co-Authored-By: Claude <noreply@anthropic.com>`). Poi, solo con `Social drafts: on`, una riga per microtask, da sola: `Bozza social: outcomes/social/<ID>.md` oppure `Il task <ID> non è una feature quindi non creo la bozza del post social`; se nessun microtask del gruppo è una feature, anche `Il gruppo <Gruppo> non è una feature quindi non creo la bozza del post social`. Il gruppo tocca CI o build (workflow, solution/progetti, props) → aggiungi `⚠ CI non verificata: controllare la prima esecuzione dopo il push`. Il report entra nel commit del gruppo. Commit solo dopo conferma, con `git add -- <file del commit>` (mai `git add -A` / `git add .`). Poi punto 5, poi STOP.
-   In `--auto`: mostra lo stesso riepilogo, fai il commit senza attendere e passa al punto 4.
-4. **PR** (solo `--auto`):
-   - Mai push su `main`/`master`: se sei lì, STOP.
+     Empty queue → `**Command:** none, queue exhausted`.
+2. **Commit files**: explicit list of the files the group touched (from the step summaries + queue, `Done`, CHANGELOG, Docs, report, social drafts, `<ID>-plan.md` in mentoring). Compare it with `git status --short`: the rest goes under "excluded".
+3. **⏸ GATE 2:** show `git diff --stat -- <commit files>` + new files (they don't appear in the diff), excluded files, link to the report, suggested bump, commit message (conventional, in `Language`, with Claude Code's `Co-Authored-By` trailer: AI attribution stays visible, don't remove it; if missing add `Co-Authored-By: Claude <noreply@anthropic.com>`). Then, only with `Social drafts: on`, one line per microtask, on its own: `Social draft: outcomes/social/<ID>.md` or `Task <ID> is not a feature, so no social post draft`; if no microtask in the group is a feature, also `Group <Group> is not a feature, so no social post draft`. The group touches CI or build (workflows, solution/projects, props) → add `⚠ CI not verified: check the first run after the push`. The report goes into the group commit. Commit only after confirmation, with `git add -- <commit files>` (never `git add -A` / `git add .`). Then point 5, then STOP.
+   In `--auto`: show the same summary, commit without waiting and go to point 4.
+4. **PR** (`--auto` only):
+   - Never push to `main`/`master`: if you're there, STOP.
    - `git push -u origin <branch>`.
-   - PR già aperta per il branch (`gh pr view --json number,url,state`) → aggiungi il body come commento (`gh pr comment`), nella lingua della PR (vedi Regole: quella del testo del task nel TODO). Altrimenti `gh pr create --base <branch di default> --title "<prima riga del commit message>" --body-file <file temporaneo>`, poi, con il numero della PR ora noto, completa i link ai file nel body e `gh pr edit <n> --body-file <file temporaneo>`.
-   - `gh` assente/non autenticato o push rifiutato → STOP con il comando da lanciare a mano; il commit resta locale.
-   - Mostra il link della PR.
-   - Review LLM (solo se scelta `Sì` all'avvio): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n> --lang "<lingua della PR>"`. Pubblica un commento sulla PR. Errore (es. `PR_REVIEW_API_KEY` mancante, HTTP 429 anche dopo i tentativi, API non raggiungibile) → riporta a me in chat la riga `Review LLM fallita (...)` stampata dallo script, senza modificare il report di gruppo (che è già stato committato), nessuno STOP aggiuntivo.
-   - Punto 5, poi STOP.
-5. **Domande da Senior** (solo con `Agent + Senior questions`): dopo il commit (in `--auto` dopo la PR), mostra in chat tutte le domande `## Step 3 — <ID>` del gruppo, raggruppate per microtask, e ferma la pipeline: il lavoro è finito. L'utente risponde quando vuole, anche in parte o per niente; commenta ogni risposta in 1-2 righe. Risposte e commenti restano in chat: niente nuovi commit.
+   - PR already open for the branch (`gh pr view --json number,url,state`) → add the body as a comment (`gh pr comment`), in the PR language (see Rules: the language of the task text in the queue). Otherwise `gh pr create --base <default branch> --title "<first line of the commit message>" --body-file <temp file>`, then, with the PR number now known, complete the file links in the body and `gh pr edit <n> --body-file <temp file>`.
+   - `gh` missing/not authenticated or push rejected → STOP with the command to run by hand; the commit stays local.
+   - Show the PR link.
+   - LLM review (only if `Yes` was chosen at startup): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" <n> --lang "<PR language>"`. It posts a comment on the PR. Error (e.g. `PR_REVIEW_API_KEY` missing, HTTP 429 even after retries, API unreachable) → report to the user in chat the `LLM review failed (...)` line printed by the script, without changing the group report (already committed), no extra STOP.
+   - Point 5, then STOP.
+5. **Senior questions** (only with `Agent + Senior questions`): after the commit (in `--auto` after the PR), show in chat all the group's `## Step 3 — <ID>` questions, grouped by microtask, and stop the pipeline: the work is done. The user answers whenever they like, partly or not at all; comment on each answer in 1-2 lines. Answers and comments stay in the chat: no new commits.
 
-### Body della PR
-Un **report** che spiega il lavoro a chi non l'ha seguito, nella **lingua della PR** (vedi Regole; indipendente da `Language`), frasi brevi; intestazioni ed etichette sono quelle dell'esempio, tradotte nella lingua della PR. Fonti: report di gruppo, Spiegazione semplice e piano del passo I, riepiloghi di implementer e test-runner.
+### PR body
+A **report** that explains the work to someone who didn't follow it, in the **PR language** (see Rules; independent of `Language`), short sentences; headings and labels are the ones in the example, translated into the PR language. Sources: group report, plain explanation and plan from step I, implementer and test-runner summaries.
 
 ```markdown
-## <Gruppo> — <titolo breve>
+## <Group> — <short title>
 
-### ⚠ Modifiche di comportamento
-- <cosa cambia per chi usa il codice: prima → ora>
+### ⚠ Behavior changes
+- <what changes for people using the code: before → now>
 
-<details><summary><b><ID></b> — <problema in una riga></summary>
+<details><summary><b><ID></b> — <problem in one line></summary>
 
-**Problema:** <cosa succedeva, esempio concreto>          ← fix
-**Impatto:** <cosa comportava per l'utente/chiamante>     ← fix
-**Obiettivo:** <cosa aggiunge e perché>                        ← feature / non-fix
+**Problem:** <what used to happen, concrete example>          ← fix
+**Impact:** <what it meant for the user/caller>     ← fix
+**Goal:** <what it adds and why>                        ← feature / non-fix
 
-**Cosa abbiamo fatto:** <2-3 frasi semplici: come funziona ora e cosa vede chi usa il codice>
+**What we did:** <2-3 plain sentences: how it works now and what people using the code see>
 
-| File | Cosa è cambiato | Perché |
+| File | What changed | Why |
 |---|---|---|
-| [`<nome file>`](https://github.com/<owner>/<repo>/pull/<n>/changes#diff-<sha256 del percorso>) | <modifica in poche parole> | <motivo> |
+| [`<file name>`](https://github.com/<owner>/<repo>/pull/<n>/changes#diff-<sha256 of the path>) | <change in a few words> | <reason> |
 
 </details>
 
-## Verifica
-| | Baseline | Ora |
+## Verification
+| | Baseline | Now |
 |---|---:|---:|
-| Warning | M | N |
-| Test superati | X | Y |
-| Coverage (produzione) | a% | b% |
+| Warnings | M | N |
+| Tests passed | X | Y |
+| Coverage (production) | a% | b% |
 
-## Note
-- Follow-up aggiunto: <ID> — <titolo>
-- Bozza social: `outcomes/social/<ID>.md` (solo feature, con `Social drafts: on`)
-- Bump suggerito: patch | minor | major (<motivo>)
-- Gate: piano (GATE 1) e diff (GATE 2) approvati dall'utente | auto-approvati in `--auto` (<motivo>)
-- ⚠ CI non verificata (solo se il gruppo tocca CI/build)
+## Notes
+- Follow-up added: <ID> — <title>
+- Social draft: `outcomes/social/<ID>.md` (features only, with `Social drafts: on`)
+- Suggested bump: patch | minor | major (<reason>)
+- Gates: plan (GATE 1) and diff (GATE 2) approved by the user | auto-approved in `--auto` (<reason>)
+- ⚠ CI not verified (only if the group touches CI/build)
 ```
-Regole:
-- Un blocco `<details>` per microtask del gruppo: su GitHub resta chiuso e mostra solo ID e problema, si apre al click.
-- "Cosa abbiamo fatto": spiega la soluzione a chi non conosce il codice (come si comporta ora, non quali righe cambiano). Sempre presente, anche per le feature.
-- Tabella file: **ogni** file del commit toccato da quel microtask (test inclusi), una riga ciascuno. Coda, `Done`, CHANGELOG e report di gruppo vanno solo in Note, se servono.
-- Link ai file: il nome è un link al suo diff nella PR. `<owner>/<repo>` da `gh repo view --json nameWithOwner`; ancora = SHA-256 del percorso relativo alla root del repo, es. `printf '%s' "src/Foo/Bar.cs" | sha256sum`. Il numero `<n>` si conosce solo dopo `gh pr create`: vedi passo 4.
-- **Niente codice né diff**: sono già nel tab "Files changed". Nomi di metodi/tipi tra backtick sì.
-- "Modifiche di comportamento": ogni cambio visibile a chi usa il codice (eccezioni, valori di ritorno, config letta, API). Assenti → ometti la sezione. Presenti → il bump suggerito ne tiene conto.
-- Riga Gate: com'è andata davvero ai gate, dal report di gruppo (`GATE n: auto-approvato` → auto-approvati). Mai scrivere "approvati dall'utente" se non c'è stata la sua conferma.
-- Riga Coverage solo se `Coverage` è configurato (allora è sempre valorizzata, vedi passo 0 e III). Sezioni vuote → omettile.
+Rules:
+- One `<details>` block per microtask in the group: on GitHub it stays collapsed showing only ID and problem, and opens on click.
+- "What we did": explain the solution to someone who doesn't know the code (how it behaves now, not which lines changed). Always present, features included.
+- File table: **every** commit file touched by that microtask (tests included), one row each. Queue, `Done`, CHANGELOG and group report go in Notes only, if needed.
+- File links: the name links to its diff in the PR. `<owner>/<repo>` from `gh repo view --json nameWithOwner`; anchor = SHA-256 of the path relative to the repo root, e.g. `printf '%s' "src/Foo/Bar.cs" | sha256sum`. The number `<n>` is only known after `gh pr create`: see step 4.
+- **No code or diffs**: they're already in the "Files changed" tab. Method/type names in backticks are fine.
+- "Behavior changes": every change visible to people using the code (exceptions, return values, config read, API). None → omit the section. Present → the suggested bump accounts for them.
+- Gates line: how the gates actually went, from the group report (`GATE n: auto-approved` → auto-approved). Never write "approved by the user" without their confirmation.
+- Coverage row only if `Coverage` is configured (then it always has a value, see steps 0 and III). Empty sections → omit them.
 
-## Esempi di invocazione
-- `/microtask-pipeline:microtask` → prossimo gruppo, chiede la modalità
-- `/microtask-pipeline:microtask G0 --auto` → tutto G0, poi commit + push + PR
-- `/microtask-pipeline:microtask A29 --manual` → solo A29, con i gate
-- `/microtask-pipeline:microtask A29 --resume` → riprende A29 dopo che hai scritto il codice (mentoring)
+## Invocation examples
+- `/microtask-pipeline:microtask` → next group, asks for the mode
+- `/microtask-pipeline:microtask G0 --auto` → all of G0, then commit + push + PR
+- `/microtask-pipeline:microtask A29 --manual` → only A29, with the gates
+- `/microtask-pipeline:microtask A29 --resume` → resumes A29 after you wrote the code (mentoring)
 
-## Esempio sezione CLAUDE.md
+## Example CLAUDE.md section
 ```markdown
 ## Microtask config
 - Queue: TODO.md
@@ -285,5 +285,5 @@ Regole:
 - Coverage: dotnet test src/MySolution.slnx -c Release --collect "Code Coverage;Format=cobertura" --results-directory TestResults/coverage
 - Watch dir: src
 - Docs: README.md, CHANGELOG.md, docs/
-- Social drafts: on    # opzionale: default off
+- Social drafts: on    # optional: default off
 ```

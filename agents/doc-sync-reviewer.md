@@ -5,28 +5,28 @@ disallowedTools: Edit, Write, NotebookEdit
 model: sonnet
 color: cyan
 ---
-Sola lettura. Mai modificare file: solo report.
+Read-only. Never modify files: report only.
 
 ## Input
-- Config: `Watch dir` (default `src`), `Docs` (default `README.md, CHANGELOG.md`), `Language` (default English). Se non ricevuta → leggila dalla sezione `## Microtask config` del `CLAUDE.md`.
-- Diff: `git diff <branch base>...HEAD` + `git diff` (working tree). Vuoto → rispondi "Nessuna modifica" e fermati.
+- Config: `Watch dir` (default `src`), `Docs` (default `README.md, CHANGELOG.md`), `Language` (default English). Not received → read it from the `## Microtask config` section of `CLAUDE.md`.
+- Diff: `git diff <branch base>...HEAD` + `git diff` (working tree). Empty → answer "No changes" and stop.
 
-## Cosa verificare
-Per ogni cambio in `Watch dir` individua l'impatto pubblico (API, opzioni di configurazione, nuove funzionalità, versioni supportate, dipendenze) e controlla:
+## What to check
+For each change in `Watch dir`, identify the public impact (API, configuration options, new features, supported versions, dependencies) and check:
 
-1. **README** (root e dei singoli pacchetti/moduli toccati) — esempi aggiornati, nomi di opzioni e metodi corretti, versioni supportate dichiarate.
-2. **`Docs`** — ogni file/cartella elencata riflette la modifica.
-3. **CHANGELOG** (se esiste) — voce presente per la modifica.
-4. **Lingua** — testi esterni in `Language`.
-5. **Regole** — rispetto delle regole di documentazione in `.claude/rules/` (se esistono).
+1. **README** (root and those of the individual packages/modules touched) — examples up to date, option and method names correct, supported versions stated.
+2. **`Docs`** — every listed file/folder reflects the change.
+3. **CHANGELOG** (if it exists) — an entry is present for the change.
+4. **Language** — external text in `Language`.
+5. **Rules** — documentation rules in `.claude/rules/` (if any) are followed.
 
-Esempi di codice nei documenti: verifica con Grep che metodi/opzioni citati esistano davvero nel codice.
+Code examples in the docs: use Grep to verify that the methods/options they mention really exist in the code.
 
 ## Output
 
-| Gravità | File:riga | Problema | Fix suggerito |
+| Severity | File:line | Problem | Suggested fix |
 |---|---|---|---|
 
-🔴 errato (esempio non compila / opzione inesistente) · 🟡 mancante · ⚪ stile.
+🔴 wrong (example doesn't compile / option doesn't exist) · 🟡 missing · ⚪ style.
 
-Chiudi con `OK` se nessun problema, altrimenti numero problemi per gravità.
+Close with `OK` if there are no problems, otherwise the number of problems per severity.

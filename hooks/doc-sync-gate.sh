@@ -2,92 +2,92 @@
 # =============================================================================
 # Stop hook (microtask-pipeline)
 #
-# Claude Code esegue questo script ogni volta che Claude finisce un turno.
-# Due possibili risposte:
-#   - esce senza stampare nulla         → Claude può chiudere il turno
-#   - stampa {"decision":"block",...}   → Claude deve prima lanciare doc-sync-reviewer
+# Claude Code runs this script every time Claude finishes a turn.
+# Two possible responses:
+#   - exits without printing anything   → Claude may end the turn
+#   - prints {"decision":"block",...}   → Claude must first run doc-sync-reviewer
 #
-# Blocca solo se la cartella sorgente è cambiata dall'ultimo controllo documentazione.
+# Blocks only if the source folder changed since the last documentation check.
 #
-# Uso manuale:  bash doc-sync-gate.sh --mark
-#   → segna lo stato attuale del codice come "documentazione già verificata".
-#     Lo lancia Claude a fine passo IV di /microtask, dopo doc-sync OK.
+# Manual use:  bash doc-sync-gate.sh --mark
+#   → marks the current code state as "documentation already verified".
+#     Claude runs it at the end of step IV of /microtask, after doc-sync OK.
 # =============================================================================
 
-# --- 1. Modalità: --mark oppure controllo normale ---------------------------
-modalita_mark=false
+# --- 1. Mode: --mark or normal check -----------------------------------------
+mark_mode=false
 if [ "$1" = "--mark" ]; then
-  modalita_mark=true
+  mark_mode=true
 else
-  dati_hook=$(cat)   # JSON che Claude Code passa all'hook
-  # Claude sta già continuando per colpa di questo hook? Lascia chiudere (evita loop).
-  if echo "$dati_hook" | grep -q '"stop_hook_active": *true'; then
+  hook_data=$(cat)   # JSON that Claude Code passes to the hook
+  # Is Claude already continuing because of this hook? Let it finish (avoids loops).
+  if echo "$hook_data" | grep -q '"stop_hook_active": *true'; then
     exit 0
   fi
 fi
 
-# --- 2. Siamo in un repository git del progetto? -----------------------------
+# --- 2. Are we in the project's git repository? ------------------------------
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 0
 fi
-cartella_git=$(git rev-parse --git-dir)
+git_dir=$(git rev-parse --git-dir)
 
-# --- 3. Pipeline /microtask in corso? Allora non disturbare. -----------------
-# /microtask crea questo file all'avvio e lo cancella a fine pipeline.
-# Durante la pipeline il turno si chiude a ogni subagent in background:
-# il controllo documentazione lo fa già il passo IV.
-# Una nuova sessione cancella il file (config-check.sh), quindi non resta appeso.
-cartello="$cartella_git/microtask-active"
-if [ "$modalita_mark" = false ] && [ -f "$cartello" ]; then
+# --- 3. /microtask pipeline in progress? Then don't interfere. ---------------
+# /microtask creates this file at startup and deletes it at the end of the pipeline.
+# During the pipeline the turn ends at every background subagent:
+# step IV already does the documentation check.
+# A new session deletes the file (config-check.sh), so it is never left dangling.
+marker="$git_dir/microtask-active"
+if [ "$mark_mode" = false ] && [ -f "$marker" ]; then
   exit 0
 fi
 
-# --- 4. Il progetto usa la pipeline? -----------------------------------------
-# Serve la sezione "## Microtask config" nel CLAUDE.md, altrimenti hook spento.
-file_config=""
-for candidato in CLAUDE.md .claude/CLAUDE.md; do
-  if grep -q '^## Microtask config' "$candidato" 2>/dev/null; then
-    file_config="$candidato"
+# --- 4. Does the project use the pipeline? -----------------------------------
+# Requires the "## Microtask config" section in CLAUDE.md, otherwise the hook is off.
+config_file=""
+for candidate in CLAUDE.md .claude/CLAUDE.md; do
+  if grep -q '^## Microtask config' "$candidate" 2>/dev/null; then
+    config_file="$candidate"
     break
   fi
 done
-if [ -z "$file_config" ]; then
+if [ -z "$config_file" ]; then
   exit 0
 fi
 
-# --- 5. Quale cartella sorvegliare ("- Watch dir: X", default src) -----------
-sezione_config=$(awk '/^## Microtask config/ {dentro=1; next}  /^## / {dentro=0}  dentro' "$file_config")
-cartella_sorgente=$(echo "$sezione_config" | sed -n 's/^[-*] *Watch dir: *//p' | head -1 | tr -d '`\r' | sed 's/[[:space:]]*$//')
-if [ -z "$cartella_sorgente" ]; then
-  cartella_sorgente="src"
+# --- 5. Which folder to watch ("- Watch dir: X", default src) ----------------
+config_section=$(awk '/^## Microtask config/ {inside=1; next}  /^## / {inside=0}  inside' "$config_file")
+source_dir=$(echo "$config_section" | sed -n 's/^[-*] *Watch dir: *//p' | head -1 | tr -d '`\r' | sed 's/[[:space:]]*$//')
+if [ -z "$source_dir" ]; then
+  source_dir="src"
 fi
 
-# --- 6. Ci sono modifiche nella cartella sorgente? ---------------------------
-modifiche=$(git diff HEAD -- "$cartella_sorgente" 2>/dev/null)
-file_nuovi=$(git ls-files --others --exclude-standard -- "$cartella_sorgente" 2>/dev/null)
-stato_codice="$modifiche$file_nuovi"
-if [ -z "$stato_codice" ]; then
+# --- 6. Are there changes in the source folder? ------------------------------
+changes=$(git diff HEAD -- "$source_dir" 2>/dev/null)
+new_files=$(git ls-files --others --exclude-standard -- "$source_dir" 2>/dev/null)
+code_state="$changes$new_files"
+if [ -z "$code_state" ]; then
   exit 0
 fi
 
-# --- 7. Questo stato del codice è già stato verificato? ----------------------
-# Impronta (hash) delle modifiche: cambia se cambia anche un solo carattere.
-impronta=$(printf '%s' "$stato_codice" | sha1sum | cut -d' ' -f1)
-file_impronta="$cartella_git/microtask-doc-sync-last"
+# --- 7. Has this code state already been verified? ---------------------------
+# Fingerprint (hash) of the changes: it changes if even a single character changes.
+fingerprint=$(printf '%s' "$code_state" | sha1sum | cut -d' ' -f1)
+fingerprint_file="$git_dir/microtask-doc-sync-last"
 
-if [ "$modalita_mark" = true ]; then
-  echo "$impronta" > "$file_impronta"   # segna come verificato
+if [ "$mark_mode" = true ]; then
+  echo "$fingerprint" > "$fingerprint_file"   # mark as verified
   exit 0
 fi
 
-if [ -f "$file_impronta" ] && [ "$(cat "$file_impronta")" = "$impronta" ]; then
-  exit 0   # già verificato
+if [ -f "$fingerprint_file" ] && [ "$(cat "$fingerprint_file")" = "$fingerprint" ]; then
+  exit 0   # already verified
 fi
 
-# Salva subito l'impronta: lo stesso stato non verrà bloccato una seconda volta.
-echo "$impronta" > "$file_impronta"
+# Save the fingerprint right away: the same state will not be blocked a second time.
+echo "$fingerprint" > "$fingerprint_file"
 
-# --- 8. Blocca: serve il controllo documentazione ----------------------------
-echo "{\"decision\":\"block\",\"reason\":\"$cartella_sorgente/ changed since last doc check. Run the microtask-pipeline:doc-sync-reviewer subagent and show its report before finishing.\"}"
+# --- 8. Block: the documentation check is needed -----------------------------
+echo "{\"decision\":\"block\",\"reason\":\"$source_dir/ changed since last doc check. Run the microtask-pipeline:doc-sync-reviewer subagent and show its report before finishing.\"}"
 exit 0

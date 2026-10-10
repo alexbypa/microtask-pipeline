@@ -1,17 +1,17 @@
-// Test di diff-select.mjs: node --test plugins/microtask-pipeline/scripts/
+// Tests for diff-select.mjs: node --test scripts/*.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classify, CODE, CONFIG, TEST, matchesPattern, parseExclude, selectDiff, splitDiff } from "./diff-select.mjs";
 
-const block = (path, body = "+riga\n") =>
+const block = (path, body = "+line\n") =>
     `diff --git a/${path} b/${path}\nindex 111..222 100644\n--- a/${path}\n+++ b/${path}\n@@ -1,1 +1,1 @@\n${body}`;
 
-test("splitDiff legge il path di ogni file, anche tra virgolette", () => {
-    const diff = block("src/A.cs") + `diff --git "a/src/con spazio.cs" "b/src/con spazio.cs"\n@@ -1 +1 @@\n+x\n`;
-    assert.deepEqual(splitDiff(diff).map((b) => b.path), ["src/A.cs", "src/con spazio.cs"]);
+test("splitDiff reads the path of each file, even in quotes", () => {
+    const diff = block("src/A.cs") + `diff --git "a/src/with space.cs" "b/src/with space.cs"\n@@ -1 +1 @@\n+x\n`;
+    assert.deepEqual(splitDiff(diff).map((b) => b.path), ["src/A.cs", "src/with space.cs"]);
 });
 
-test("classify riconosce codice, configurazione e test (anche .NET)", () => {
+test("classify recognizes code, configuration and tests (including .NET)", () => {
     assert.equal(classify("src/Dashboard/DashboardOptions.cs"), CODE);
     assert.equal(classify("src/app.js"), CODE);
     assert.equal(classify("src/Lib/Lib.csproj"), CONFIG);
@@ -23,7 +23,7 @@ test("classify riconosce codice, configurazione e test (anche .NET)", () => {
     assert.equal(classify("test/fixture.json"), TEST);
 });
 
-test("matchesPattern: cartelle, nomi file e path", () => {
+test("matchesPattern: folders, file names and paths", () => {
     assert.ok(matchesPattern("docs/site/index.html", "docs/"));
     assert.ok(matchesPattern("src/docs/a.txt", "docs/"));
     assert.ok(!matchesPattern("src/Docsy.cs", "docs/"));
@@ -33,14 +33,14 @@ test("matchesPattern: cartelle, nomi file e path", () => {
     assert.ok(matchesPattern("src/gen/a.cs", "src/gen/*.cs"));
 });
 
-test("parseExclude aggiunge ai default e toglie con !", () => {
+test("parseExclude adds to the defaults and removes with !", () => {
     const list = parseExclude("*.sql, !docs/");
     assert.ok(list.includes("*.sql"));
     assert.ok(list.includes("*.md"));
     assert.ok(!list.includes("docs/"));
 });
 
-test("selectDiff: niente documentazione, codice prima dei test", () => {
+test("selectDiff: no documentation, code before tests", () => {
     const diff = block("CHANGELOG.md") + block("tests/AuthTests.cs") + block("docs/x.html") + block("src/Auth.cs") + block("src/App.csproj");
     const r = selectDiff(diff, { maxChars: 100000 });
     assert.deepEqual(r.excluded, ["CHANGELOG.md", "docs/x.html"]);
@@ -48,7 +48,7 @@ test("selectDiff: niente documentazione, codice prima dei test", () => {
     assert.deepEqual(r.omitted, []);
 });
 
-test("selectDiff: sul limite si perdono i test, mai un file a metà", () => {
+test("selectDiff: at the limit tests are dropped, never half a file", () => {
     const code = block("src/Auth.cs");
     const diff = block("tests/AuthTests.cs", "+test\n".repeat(50)) + code;
     const r = selectDiff(diff, { maxChars: code.length + 10 });
@@ -56,8 +56,8 @@ test("selectDiff: sul limite si perdono i test, mai un file a metà", () => {
     assert.deepEqual(r.omitted, ["tests/AuthTests.cs"]);
 });
 
-test("selectDiff: un file di codice oltre il limite entra a hunk interi", () => {
-    const hunk = (n) => `@@ -${n},1 +${n},1 @@\n${"+riga\n".repeat(20)}`;
+test("selectDiff: a code file over the limit goes in as whole hunks", () => {
+    const hunk = (n) => `@@ -${n},1 +${n},1 @@\n${"+line\n".repeat(20)}`;
     const header = `diff --git a/src/Big.cs b/src/Big.cs\n--- a/src/Big.cs\n+++ b/src/Big.cs\n`;
     const text = header + hunk(1) + hunk(50) + hunk(90);
     const r = selectDiff(text, { maxChars: header.length + hunk(1).length + hunk(50).length + 5 });
@@ -66,7 +66,7 @@ test("selectDiff: un file di codice oltre il limite entra a hunk interi", () => 
     assert.equal((r.text.match(/^@@ /gm) || []).length, 2);
 });
 
-test("selectDiff: PR di sola documentazione manda la documentazione", () => {
+test("selectDiff: documentation-only PR sends the documentation", () => {
     const r = selectDiff(block("README.md"), { maxChars: 100000 });
     assert.ok(r.docsOnly);
     assert.match(r.text, /README\.md/);
