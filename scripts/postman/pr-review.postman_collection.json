@@ -1,0 +1,198 @@
+{
+  "info": {
+    "name": "microtask-pipeline - PR review simulation",
+    "description": "Reproduces the call made by scripts/pr-review.mjs: fetches the PR diff from GitHub, builds the same prompt, POSTs to <baseUrl>/chat/completions and shows the review in the Visualize tab. Never comments on the PR.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://generativelanguage.googleapis.com/v1beta/openai"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    },
+    {
+      "key": "model",
+      "value": "gemini-3.6-flash"
+    },
+    {
+      "key": "owner",
+      "value": "<owner>"
+    },
+    {
+      "key": "repo",
+      "value": "<repo>"
+    },
+    {
+      "key": "prNumber",
+      "value": "1"
+    },
+    {
+      "key": "language",
+      "value": "English"
+    },
+    {
+      "key": "maxChars",
+      "value": "16000"
+    },
+    {
+      "key": "maxTokens",
+      "value": "4096"
+    },
+    {
+      "key": "githubToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "PR review (chat/completions)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Simula scripts/pr-review.mjs: scarica il diff della PR da GitHub e costruisce lo stesso prompt.",
+              "const owner = pm.collectionVariables.get(\"owner\");",
+              "const repo = pm.collectionVariables.get(\"repo\");",
+              "const pr = pm.collectionVariables.get(\"prNumber\");",
+              "const language = pm.collectionVariables.get(\"language\") || \"English\";",
+              "const maxChars = Number(pm.collectionVariables.get(\"maxChars\")) || 16000;",
+              "const ghToken = pm.collectionVariables.get(\"githubToken\");",
+              "",
+              "const headers = { \"Accept\": \"application/vnd.github.diff\", \"User-Agent\": \"postman-pr-review\" };",
+              "if (ghToken) headers[\"Authorization\"] = \"Bearer \" + ghToken;",
+              "",
+              "pm.sendRequest({",
+              "    url: `https://api.github.com/repos/${owner}/${repo}/pulls/${pr}`,",
+              "    method: \"GET\",",
+              "    header: Object.entries(headers).map(([key, value]) => ({ key, value })),",
+              "}, (err, res) => {",
+              "    if (err || res.code !== 200) {",
+              "        throw new Error(`GitHub diff fallito: ${err || res.code + \" \" + res.text().substring(0, 300)}`);",
+              "    }",
+              "    const diff = res.text();",
+              "",
+              "    // Versione semplificata di diff-select.mjs: esclude doc/generati e taglia ai confini di file.",
+              "    const exclude = [/\\.md$/i, /(^|\\/)llms\\.txt$/, /(^|\\/)docs\\//, /(^|\\/)outcomes\\//, /package-lock\\.json$/,",
+              "        /packages\\.lock\\.json$/, /pnpm-lock\\.yaml$/, /\\.lock$/, /\\.min\\.(js|css)$/, /\\.Designer\\.cs$/, /\\.g\\.cs$/];",
+              "    const starts = [...diff.matchAll(/^diff --git /gm)].map(m => m.index);",
+              "    const blocks = starts.map((s, i) => {",
+              "        const text = diff.slice(s, starts[i + 1] ?? diff.length);",
+              "        const m = / b\\/(.+)$/m.exec(text.split(\"\\n\")[0]);",
+              "        return { path: m ? m[1] : \"?\", text };",
+              "    });",
+              "    const kept = [], excluded = [], omitted = [];",
+              "    let size = 0;",
+              "    for (const b of blocks) {",
+              "        if (exclude.some(r => r.test(b.path))) { excluded.push(b.path); continue; }",
+              "        if (size + b.text.length > maxChars) { omitted.push(b.path); continue; }",
+              "        kept.push(b); size += b.text.length;",
+              "    }",
+              "    const missing = [];",
+              "    if (excluded.length) missing.push(\"Excluded files (documentation or generated):\\n\" + excluded.map(f => \"- \" + f).join(\"\\n\"));",
+              "    if (omitted.length) missing.push(\"Files omitted due to length limit:\\n\" + omitted.map(f => \"- \" + f).join(\"\\n\"));",
+              "    const missingSection = missing.length",
+              "        ? `\\nThe diff may be incomplete: do not report as an issue code that appears truncated or files you cannot see.\\n\\n${missing.join(\"\\n\\n\")}\\n`",
+              "        : \"\";",
+              "",
+              "    const prompt = `You are an expert code reviewer. Analyze the following git diff and write a Code Review in this language: ${language} (section titles included), regardless of the language of the diff, of the project and of this prompt.",
+              "Follow exactly this structure:",
+              "",
+              "1. **Explanation:** Elementary (beginner-proof) explanation of what the fix or feature does.",
+              "2. **Risks and Issues:** Highlight any issues, risks or edge cases.",
+              "3. **Suggested fixes:** Any fix code formatted in Markdown, if needed (otherwise state that there are no fixes).",
+              "${missingSection}",
+              "Here is the diff:",
+              "\\`\\`\\`diff",
+              "${kept.map(b => b.text).join(\"\")}",
+              "\\`\\`\\`",
+              "`;",
+              "",
+              "    pm.request.body.update({",
+              "        mode: \"raw\",",
+              "        raw: JSON.stringify({",
+              "            model: pm.collectionVariables.get(\"model\"),",
+              "            messages: [{ role: \"user\", content: prompt }],",
+              "            max_tokens: Number(pm.collectionVariables.get(\"maxTokens\")) || 4096,",
+              "        }, null, 2),",
+              "        options: { raw: { language: \"json\" } },",
+              "    });",
+              "    console.log(`Diff: ${blocks.length} file, inclusi ${kept.length}, esclusi ${excluded.length}, omessi ${omitted.length}; prompt ${prompt.length} caratteri`);",
+              "});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Mostra la review come la vedresti nel commento della PR (tab \"Visualize\"). Non pubblica nulla su GitHub.",
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) {",
+              "    console.log(`Errore ${pm.response.code}: ${pm.response.text().substring(0, 500)}`);",
+              "    return;",
+              "}",
+              "const data = pm.response.json();",
+              "const review = data.choices?.[0]?.message?.content || \"(risposta vuota)\";",
+              "const u = data.usage || {};",
+              "console.log(`Token: ${u.prompt_tokens} inviati, ${u.completion_tokens} risposta; finish_reason=${data.choices?.[0]?.finish_reason}`);",
+              "const escaped = review.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\");",
+              "pm.visualizer.set(`<h3>🤖 Automated review (${pm.collectionVariables.get(\"model\")})</h3><pre style=\"white-space:pre-wrap;font-family:inherit\">${escaped}</pre>`);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{apiKey}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}  // generato dal Pre-request script",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/chat/completions"
+      }
+    },
+    {
+      "name": "List models",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{apiKey}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{baseUrl}}/models"
+      }
+    }
+  ]
+}

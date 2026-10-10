@@ -182,7 +182,28 @@ Settings come from the environment or the project `.env` (environment wins; keep
 | `PR_REVIEW_REASONING_EFFORT` | *(none)* | Optional `reasoning_effort`, for providers that support it |
 | `PR_REVIEW_EXCLUDE` | *(none)* | Comma-separated patterns to leave out of the diff; `!pattern` re-includes a default one (e.g. `!*.md`) |
 
-Example for Gemini: `PR_REVIEW_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`. Failures never block the pipeline. The diff is sent to the configured provider, private repos included.
+Failures never block the pipeline. The diff is sent to the configured provider, private repos included.
+
+### Switching provider or model
+
+No code changes, no plugin update: edit the `.env` of the project where you run the pipeline (the host project, not the plugin). `PR_REVIEW_API_KEY`, `PR_REVIEW_BASE_URL` and `PR_REVIEW_MODEL` pick the provider and model; `PR_REVIEW_MAX_CHARS` and `PR_REVIEW_MAX_TOKENS` are optional and worth tuning per model (a bigger context window allows a bigger diff budget). The startup check prints the active `<model @ host>`, so you can see the change right away.
+
+```dotenv
+# Groq (default)
+PR_REVIEW_API_KEY=gsk_...
+
+# Gemini
+PR_REVIEW_API_KEY=AIza...
+PR_REVIEW_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+PR_REVIEW_MODEL=gemini-3.6-flash
+PR_REVIEW_MAX_CHARS=60000
+```
+
+If a model keeps answering HTTP 503 (`UNAVAILABLE`), the provider is overloaded, typically right after a new model ships: switch `PR_REVIEW_MODEL` to the previous stable model of the same family.
+
+### Try it in Postman before a real run
+
+[`scripts/postman/pr-review.postman_collection.json`](scripts/postman/pr-review.postman_collection.json) replays the review of a real PR without posting anything, so you can compare providers and models side by side. Import it, then fill the collection variables `apiKey`, `baseUrl`, `model`, `owner`, `repo`, `prNumber` (and `githubToken` for private repos or GitHub rate limits). Its pre-request script downloads the PR diff from the GitHub API, skips docs and generated files, cuts at `maxChars` on file boundaries and builds the same prompt as `pr-review.mjs`; the review appears in the **Visualize** tab and token usage in the Console. The diff selection is a simplified version of the plugin's (no code-before-tests ordering, no partial files). A `List models` request shows which models your key can use.
 
 ## Components
 
