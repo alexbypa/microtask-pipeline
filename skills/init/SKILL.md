@@ -1,6 +1,6 @@
 ---
 name: init
-description: Configura microtask-pipeline nel progetto corrente: rileva build/test/cartelle, propone la sezione "## Microtask config" per CLAUDE.md e crea la coda in TODO.md se manca.
+description: "Configura microtask-pipeline nel progetto corrente: rileva build/test/cartelle, propone la sezione \"## Microtask config\" per CLAUDE.md e crea la coda in TODO.md se manca."
 disable-model-invocation: true
 ---
 # Setup microtask-pipeline

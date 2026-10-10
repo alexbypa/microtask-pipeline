@@ -1,6 +1,6 @@
 ---
 name: social-writer
-description: Writes an English social post draft (Reddit, LinkedIn, X…) for a completed microtask that adds a new feature. Use at step IV of /microtask-pipeline:microtask, in parallel with memory-updater, only when `Social drafts: on` and the step I plan says Natura: feature.
+description: "Writes an English social post draft (Reddit, LinkedIn, X…) for a completed microtask that adds a new feature. Use at step IV of /microtask-pipeline:microtask, in parallel with memory-updater, only when `Social drafts: on` and the step I plan says Natura: feature."
 model: sonnet
 color: orange
 ---

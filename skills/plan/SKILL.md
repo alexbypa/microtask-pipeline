@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Trasforma un documento di roadmap in righe della coda microtask (Queue in CLAUDE.md): propone gruppi, ID, tipi e task con riferimento alla sezione, attende approvazione, poi le aggiunge in fondo alla coda.
+description: "Trasforma un documento di roadmap in righe della coda microtask (Queue in CLAUDE.md): propone gruppi, ID, tipi e task con riferimento alla sezione, attende approvazione, poi le aggiunge in fondo alla coda."
 disable-model-invocation: true
 argument-hint: "<file roadmap> [--prefix R]"
 ---

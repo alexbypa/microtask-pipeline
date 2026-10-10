@@ -1,6 +1,6 @@
 ---
 name: microtask
-description: Esegue un gruppo (o un singolo microtask) della coda microtask (TODO.md) con pipeline multi-agent: baseline → analisi SOLID → implementazione (agent o tu, in mentoring) → test → review indipendente → docs → commit di gruppo; in modalità --auto anche push e pull request.
+description: "Esegue un gruppo (o un singolo microtask) della coda microtask (TODO.md) con pipeline multi-agent: baseline → analisi SOLID → implementazione (agent o tu, in mentoring) → test → review indipendente → docs → commit di gruppo; in modalità --auto anche push e pull request."
 disable-model-invocation: true
 argument-hint: "[ID task (A29) o gruppo (G0) — opzionale] [--auto | --manual] [--resume]"
 ---
