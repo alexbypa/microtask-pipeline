@@ -174,7 +174,7 @@ Project rules in `.claude/rules/*.md` are passed to every agent: add project-spe
 
 At the end of an `--auto` run the pipeline can send the PR diff to another model and post its review as a PR comment. It works with any OpenAI-compatible chat completions API and has zero dependencies (Node.js 18+). The question is asked at startup only when the review is configured.
 
-Settings come from the environment or the project `.env` (environment wins; keep `.env` in `.gitignore`):
+Settings come from the environment or the project `.env`, looked up in the current folder and then in the git root (environment wins; keep `.env` in `.gitignore`). The check runs at every start (except `--manual`): you see either the question or a `LLM review not configured: …` line saying why not.
 
 | Variable | Default | Meaning |
 |---|---|---|

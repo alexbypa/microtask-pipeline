@@ -4,12 +4,13 @@
 // --lang: review language (default English); the skill passes the PR language.
 import { execFileSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import { parseExclude, selectDiff } from "./diff-select.mjs";
 import { parseLanguageArg, phrasesFor } from "./review-language.mjs";
 import { isTransient, modelChain, waitSeconds } from "./retry-policy.mjs";
 
-// Loads .env from the current folder (no dependencies). Variables already set take precedence.
-function loadDotEnv(path = ".env") {
+// Loads a .env file (no dependencies). Variables already set take precedence.
+function loadDotEnv(path) {
     if (!existsSync(path)) return;
     for (const raw of readFileSync(path, "utf-8").split(/\r?\n/)) {
         const line = raw.trim();
@@ -22,7 +23,18 @@ function loadDotEnv(path = ".env") {
     }
 }
 
-loadDotEnv();
+// The current folder's .env, then the git root's (Claude's shell may be in a subfolder of the project).
+function gitRoot() {
+    try {
+        return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+        return undefined;
+    }
+}
+
+loadDotEnv(".env");
+const root = gitRoot();
+if (root) loadDotEnv(join(root, ".env"));
 
 // Positive integer from the environment; if missing or empty uses the default, if invalid warns on stdout.
 function positiveIntEnv(name, fallback) {
@@ -67,7 +79,7 @@ if (args[0] === "--check") {
             (config.fallbackModel ? `, fallback ${config.fallbackModel}` : ""));
         process.exit(0);
     }
-    console.log("LLM review not configured: PR_REVIEW_API_KEY missing (environment or .env).");
+    console.log("LLM review not configured: PR_REVIEW_API_KEY missing (environment, .env in the current folder or in the git root).");
     process.exit(2);
 }
 

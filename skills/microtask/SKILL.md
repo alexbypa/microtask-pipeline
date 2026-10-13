@@ -61,7 +61,7 @@ ID not found, or group with no `[ ]` → say so and stop. Mark the running micro
 `--resume` (with or without ID) doesn't select `[ ]` rows: it resumes the `[/]` microtask paused in mentoring (see "Resume"). No ID → the queue's `[/]` row; no `[/]`, more than one, or `outcomes/microtask/<ID>-plan.md` missing → say so and stop.
 
 ## Introduction (first output, before any question)
-**Mandatory startup order:** selection → introduction → "proceed?" question → code-author question (mandatory if the group has a `code` task) → mode question (only without a flag) → branch → baseline. Never ask for the mode before the introduction. With `--resume` no introduction and no questions: go to "Resume".
+**Mandatory startup order:** selection → introduction → LLM review check (`pr-review.mjs --check`, see below; skipped only with `--manual`) → "proceed?" question → code-author question (mandatory if the group has a `code` task) → mode question (only without a flag) → branch → baseline. Never ask for the mode before the introduction. With `--resume` no introduction and no questions: go to "Resume".
 
 Sources: selected queue rows, the code they touch (quick read, no agent), goals in the project's `CLAUDE.md` (e.g. a **Goals** section). Conversation language, short sentences, no padding. Use **exactly** this format (markdown, not a single paragraph):
 
@@ -83,14 +83,14 @@ _Pre-analysis estimate: the step I plan may correct it._
 ```
 Section 3 is mandatory even with low impact. `CLAUDE.md` without goals → "Impact on people using the code".
 
-Right after, **a single** `AskUserQuestion` call with these sequential questions:
+Right after the introduction, **before** the questions, **always** run the LLM review check (only `--manual` skips it): `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" --check` (reads the environment, then the `.env` of the current folder and of the git root; never prints the key). Exit 0 → configured, the printed line gives `<model @ host>` for question 4; otherwise no question 4, review disabled, and write the printed line (`LLM review not configured: ...`) in chat. Never skip it silently: the user must see either question 4 or that line.
+
+Then **a single** `AskUserQuestion` call with these sequential questions:
 1. "Proceed with <Group>?" → `Proceed` / `Stop` (Stop → remove `[/]`, STOP).
 2. "Who writes the production code?" → `Me (mentoring)` / `Agent + Senior questions` / `Agent`. **Mandatory** if the group has at least one `code` task: always asked, even in `--auto`, and no config skips it (groups with only `analysis`/`docs`/`content` → no question). Put first, marked `(recommended)`, the option suggested by the project rule `.claude/rules/mentoring-mode.md` if the project has one, otherwise by these criteria: `Me (mentoring)` for features and architectural decisions (new file, interface, endpoint, project, layer change, an area the user has never touched); `Agent` for fixes to existing code, mechanical refactors, tasks under 5 lines with no new abstractions, config, docs. In the recommended option's description, one line on why. It applies to the whole group; tests are always written by `test-runner`.
    `Agent + Senior questions` = the agent writes the code, then Step 3 on its code (see "Step 3"). Option labels are translated into the conversation language (e.g. in Italian `Io (mentoring)` / `Agent + domande da Senior` / `Agent`). Always all three options in this question: the questions of one `AskUserQuestion` arrive together (max 4), so no question may depend on the answer to another.
 3. Only without `--auto`/`--manual`: "Mode?" → `Manual` / `Auto`, one line each on what it means (see below).
 4. Only without `--manual` and if the LLM review is configured: "After the PR, should I ask <model @ host> for a review posted as a comment? (Auto only)" → `Yes` / `No`.
-
-Before the `AskUserQuestion` run `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" --check` (reads the environment and the project's `.env`, never prints the key): exit 0 → configured, the printed line gives `<model @ host>` for question 4; otherwise no question 4, review disabled, and write the printed line (`LLM review not configured: ...`).
 
 ## Modes
 - `--manual` → stops at the gates (⏸ GATE 1, ⏸ DESIGN GATE when the agent writes the code, ⏸ GATE 2) and waits for the user's approval. No push.
