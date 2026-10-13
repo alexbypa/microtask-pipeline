@@ -1,6 +1,6 @@
 ---
 name: microtask
-description: "Runs a group (or a single microtask) from the microtask queue (TODO.md) through a multi-agent pipeline: baseline → SOLID analysis → implementation (agent or you, in mentoring) → tests → independent review → docs → group commit; in --auto mode also push and pull request."
+description: "Runs a group (or a single microtask) from the microtask queue (TODO.md) through a multi-agent pipeline: baseline → SOLID analysis → implementation (agent or you, in mentoring) → SOLID design map of the agent's code → tests → independent review → docs → group commit; in --auto mode also push and pull request."
 disable-model-invocation: true
 argument-hint: "[task ID (A29) or group (G0) — optional] [--auto | --manual] [--resume]"
 ---
@@ -93,8 +93,8 @@ Right after, **a single** `AskUserQuestion` call with these sequential questions
 Before the `AskUserQuestion` run `node "${CLAUDE_PLUGIN_ROOT}/scripts/pr-review.mjs" --check` (reads the environment and the project's `.env`, never prints the key): exit 0 → configured, the printed line gives `<model @ host>` for question 4; otherwise no question 4, review disabled, and write the printed line (`LLM review not configured: ...`).
 
 ## Modes
-- `--manual` → stops at the gates (⏸ GATE 1, ⏸ GATE 2) and waits for the user's approval. No push.
-- `--auto` → no waiting at the gates: decide yourself and log it in the report (`GATE n: auto-approved` + reason). At the end of the group commit, push and pull request (step 4 of "End of group"). In mentoring the stops at II-user, review fixes and Step 3 remain; without the user's code and answers nothing moves on. With `Agent + Senior questions` Step 3 doesn't stop: the questions come at the end of the group. The mode is saved in the plan and still applies after `--resume`.
+- `--manual` → stops at the gates (⏸ GATE 1, ⏸ DESIGN GATE when the agent writes the code, ⏸ GATE 2) and waits for the user's approval. No push.
+- `--auto` → no waiting at the gates: decide yourself and log it in the report (`GATE n: auto-approved` / `DESIGN GATE: auto-approved` + reason). At the end of the group commit, push and pull request (step 4 of "End of group"). In mentoring the stops at II-user, review fixes and Step 3 remain; without the user's code and answers nothing moves on. With `Agent + Senior questions` Step 3 doesn't stop: the questions come at the end of the group. The mode is saved in the plan and still applies after `--resume`.
 - Neither → the mode is the third question of the Introduction.
 
 **STOP even in `--auto`** (stop, explain, wait):
@@ -110,14 +110,14 @@ Claude Code permission prompts (e.g. `git push`, `gh pr create`) don't depend on
 ## Steps by type
 | Type | Steps |
 |---|---|
-| `code` | 0 → I → ⏸G1 → II → III → V → IV |
-| `code` with `Agent + Senior questions` | 0 → I → ⏸G1 → II → III → V → Step 3 (questions only, no stop) → IV |
+| `code` | 0 → I → ⏸G1 → II → II-D (⏸ DESIGN GATE) → III → V → IV |
+| `code` with `Agent + Senior questions` | 0 → I → ⏸G1 → II → II-D (⏸ DESIGN GATE) → III → V → Step 3 (questions only, no stop) → IV |
 | `code` in mentoring | 0 → I → ⏸G1 → II-user (⏸ STOP) · `--resume` → III → V → ⏸ Step 3 → IV |
 | `analysis` | 0 → I → report in `outcomes/audits/<ID>.md` → IV |
 | `docs` | I (impact only) → ⏸G1 → IV → doc-sync |
 | `content` | draft in `outcomes/content/<ID>.md` → ⏸G1 → IV |
 
-**Fast lane** (`code` only, if plan I says `Lane: fast`): II (only with the `Agent` implementer; in mentoring II-user remains), III and IV are run **by you** without subagents, with the same rules as the agents (full build, warning count, green tests, queue/CHANGELOG/Docs). Still agents: I (analysis) and V (independent review). At GATE 1 show the lane: the user can ask for the full one.
+**Fast lane** (`code` only, if plan I says `Lane: fast`): II (only with the `Agent` implementer; in mentoring II-user remains), III and IV are run **by you** without subagents, with the same rules as the agents (full build, warning count, green tests, queue/CHANGELOG/Docs). At II-D you write the design log yourself, following `implementer`'s "Design log" with `Diagram: off` (placement entries only, no diagrams). Still agents: I (analysis) and V (independent review). At GATE 1 show the lane: the user can ask for the full one.
 
 ### 0. Baseline (once per group)
 Run a **full** `Build` (not incremental: .NET `--no-incremental`, other stacks clean first) + `Test`, or **`Coverage` if configured** (mandatory, fast lane included: never `Test` in its place). Record errors, **warning count**, **pre-existing** failures (not regressions) and, with `Coverage`, the **global production line coverage** (same rules as `test-runner`).
@@ -133,7 +133,19 @@ Only with `Social drafts: on`: right below the plan (also in `--auto` and in the
 In `--auto`: show the same text and carry on (except STOP cases). The plain explanation and the plan also feed the PR body.
 
 ### II. Implementation → agent `microtask-pipeline:implementer`
-Pass: approved plan + `Build` command. Report errors only: its build is incremental, warnings aren't reliable.
+Pass: approved plan + `Build` command (+ `Diagram: off` in the fast lane). Report errors only: its build is incremental, warnings aren't reliable. Receive: summary + `## Design` (see II-D).
+
+### II-D. Design map (`Agent` and `Agent + Senior questions` only)
+Shows, after the agent wrote the code and before tests, **where every class and method went and why** (SOLID), and how the architecture changed. Source: the `## Design` section from `implementer` (in the fast lane, yours). Not in mentoring: there the user designs the code (Step 2).
+1. Check it against the diff (`git diff --stat` + the changed files): every added/changed/moved/removed production type or method has an entry; missing or wrong → fix the log yourself, don't re-run the agent.
+2. Show it in chat, in the conversation language (headings, "Why here", "Discarded"; type names, paths and Mermaid code unchanged):
+   - `## Design — <ID>`, then the entries **one by one, in the order of the changes**;
+   - `### Before` → `### After` Mermaid diagrams (not in the fast lane), with 1-2 lines under them on what changed in the architecture (new dependency direction, new layer, responsibility split…);
+   - entries that differ from the GATE 1 plan → mark them `⚠ differs from plan: <why>`.
+3. **⏸ DESIGN GATE** (`--manual`): wait for approval. The user asks for a different placement → back to II with that feedback (only the change asked, then II-D again); it counts toward the 2 fix rounds of V. `--auto` → show it and carry on, log `DESIGN GATE: auto-approved` + reason; a `⚠ differs from plan` entry with a public API impact → STOP, like an out-of-plan change.
+4. Save the shown design in the group report (`## Design — <ID>`), conversation language; it also feeds the PR body.
+
+After a review fix round, `implementer` returns only the changed entries: show them under `## Design — <ID> (round <n>)`, update the report, no gate.
 
 ### II-user. Mentoring: the user writes the code
 Instead of the `implementer` agent. Step I has already done "Step 1" of `mentoring-mode` (logical overview, no code), approved at GATE 1.
@@ -191,6 +203,7 @@ After doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` 
 1. **Report** in `outcomes/microtask/<yyyy-MM-dd>-<Group>.md` (conversation language):
    - baseline → final (build, warnings, tests; with `Coverage`: global line coverage and changed lines covered N/M);
    - per microtask: what was done, gate decisions, deviations from the plan;
+   - with the agent writing the code: `## Design — <ID>` sections from II-D (entries + diagrams, fix rounds included);
    - review findings: resolved / deferred;
    - follow-up tasks added to the queue;
    - social drafts (only with `Social drafts: on`): created (`outcomes/social/<ID>.md`), or the GATE 2 "not a feature" lines;
@@ -242,7 +255,17 @@ A **report** that explains the work to someone who didn't follow it, in the **PR
 |---|---|---|
 | [`<file name>`](https://github.com/<owner>/<repo>/pull/<n>/changes#diff-<sha256 of the path>) | <change in a few words> | <reason> |
 
+**Design**
+| Element | File | Layer | SOLID | Why here |
+|---|---|---|---|---|
+| `<Type.Method>` (new/changed/moved/removed) | `<path>` | <layer> | <principle> | <1 line> |
+
+<Before / After Mermaid classDiagrams from II-D, then the discarded alternatives as a short list>
+
 </details>
+
+## Architecture
+<only with ≥2 code microtasks written by the agent: one Mermaid classDiagram of the whole group after the change, stereotypes `<<new>>`/`<<changed>>`/`<<moved>>`, then 1-3 lines on how the architecture changed>
 
 ## Verification
 | | Baseline | Now |
@@ -263,7 +286,8 @@ Rules:
 - "What we did": explain the solution to someone who doesn't know the code (how it behaves now, not which lines changed). Always present, features included.
 - File table: **every** commit file touched by that microtask (tests included), one row each. Queue, `Done`, CHANGELOG and group report go in Notes only, if needed.
 - File links: the name links to its diff in the PR. `<owner>/<repo>` from `gh repo view --json nameWithOwner`; anchor = SHA-256 of the path relative to the repo root, e.g. `printf '%s' "src/Foo/Bar.cs" | sha256sum`. The number `<n>` is only known after `gh pr create`: see step 4.
-- **No code or diffs**: they're already in the "Files changed" tab. Method/type names in backticks are fine.
+- "Design" and "Architecture": only for `code` microtasks written by the agent (not in mentoring), from the group report's `## Design — <ID>`; fast lane → table only, no diagrams. Mermaid diagrams render on GitHub, also inside `<details>`.
+- **No code or diffs**: they're already in the "Files changed" tab (Mermaid diagrams are not code). Method/type names in backticks are fine.
 - "Behavior changes": every change visible to people using the code (exceptions, return values, config read, API). None → omit the section. Present → the suggested bump accounts for them.
 - Gates line: how the gates actually went, from the group report (`GATE n: auto-approved` → auto-approved). Never write "approved by the user" without their confirmation.
 - Coverage row only if `Coverage` is configured (then it always has a value, see steps 0 and III). Empty sections → omit them.
