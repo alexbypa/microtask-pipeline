@@ -16,6 +16,7 @@ AI can write code fast. The hard part is trusting it. microtask-pipeline makes t
 - 🕵️ **Independent review.** The `reviewer` agent sees only the diff and the public API snapshot, never the plan or the author's intentions, so it judges the code as it is. It also suggests the semver bump.
 - 🚦 **You stay in control.** Two approval gates (the plan, then the diff and commit message), or `--auto` to run unattended and land a pull request.
 - 🛑 **It stops instead of guessing.** Red tests that weren't red at baseline, an out-of-plan change, a breaking change, unresolved 🔴 findings after two rounds: the pipeline stops and explains why, even in `--auto`.
+- 🏛️ **See the design, not just the diff.** When the agent writes the code, it maps every class and method it added, changed or moved: which file and layer, which SOLID principle decided the placement, which alternatives it discarded, plus Mermaid class diagrams of the architecture before and after. You approve the design before tests run (`--manual`), and it lands in the PR.
 - 📝 **PRs that humans actually read.** The PR body is a report: behavior changes first, then per task the problem, the impact, what was done in plain words, a table of every file touched with a link to its diff, and baseline → now numbers.
 - 🎓 **Learn while you ship.** Mentoring mode lets *you* write the code while the pipeline plans, tests and reviews it, then asks Senior-level questions on your choices. Or let the agent write the code and get the questions on *its* code.
 - 🤖 **A second opinion from another model.** Optionally sends the PR diff to any OpenAI-compatible LLM (Groq, Gemini, OpenAI, Mistral, DeepSeek, Ollama…) and posts its review as a PR comment.
@@ -51,7 +52,8 @@ flowchart LR
     B --> A[I. Analysis<br/>solid-analyst]
     A --> G1{GATE 1<br/>approve plan}
     G1 --> I[II. Implement<br/>agent or you]
-    I --> T[III. Tests<br/>test-runner]
+    I --> DG{II-D. Design map<br/>approve placement}
+    DG --> T[III. Tests<br/>test-runner]
     T --> R[V. Independent review<br/>reviewer]
     R -- "🔴 max 2 rounds" --> I
     R --> D[IV. Docs<br/>queue, CHANGELOG, README]
@@ -67,13 +69,14 @@ flowchart LR
 | **I. Analysis** | `solid-analyst` | A plan with files, SOLID notes, risk, breaking changes and a public API snapshot. Fixes come with a plain "problem → why → how we fix it" explanation. |
 | **⏸ GATE 1** | you | Approve the plan, or ask for changes. |
 | **II. Implementation** | `implementer` or you | Applies only the approved plan. In mentoring you write it. |
+| **II-D. Design map** | `implementer` → you | Agent-written code only. One entry per class/method, in the order of the changes: file, layer, SOLID principle, why it goes there, discarded alternatives; then Mermaid class diagrams before → after. Entries that differ from the plan are flagged. `--manual` waits for your approval before tests (ask for a different placement and it goes back to II); `--auto` shows it and carries on. |
 | **III. Tests** | `test-runner` | Writes and runs tests, full build, warnings vs baseline, changed-line coverage. |
 | **V. Review** | `reviewer` | Independent review of the diff, public API diff, semver bump. 🔴 and small 🟡 go back to II (max 2 rounds). |
 | **IV. Memory** | `memory-updater`, `doc-sync-reviewer` | Updates the queue, `CHANGELOG` Unreleased and docs, then checks they match the code. |
 | **⏸ GATE 2** | you | Approve the file list, diff stats and commit message. |
 | **PR** | skill (`--auto`) | Push, `gh pr create` with a report body, optional LLM review comment. |
 
-**Fast lane.** When the analysis says a change is small (few files, few lines, no public API change, no new dependency, low risk), steps II–IV run inline without subagents. Analysis and the independent review always stay agents, and you can ask for the full lane at GATE 1.
+**Fast lane.** When the analysis says a change is small (few files, few lines, no public API change, no new dependency, low risk), steps II–IV run inline without subagents, and the design map is a placement table without diagrams. Analysis and the independent review always stay agents, and you can ask for the full lane at GATE 1.
 
 **Review findings.** 🔴 → back to implementation · small 🟡 (≤10 lines, same files, no API change) → fixed in the same round · large 🟡 → proposed at GATE 2 or added to the queue as a follow-up · ⚪ → report only.
 
@@ -86,7 +89,7 @@ flowchart LR
 | `/microtask-pipeline:microtask` | Run the next group in the queue |
 | `/microtask-pipeline:microtask A1` | Run only microtask `A1` |
 | `/microtask-pipeline:microtask G1` | Run every open microtask of group `G1` |
-| `… --manual` | Stop at GATE 1 and GATE 2; no push |
+| `… --manual` | Stop at GATE 1, the design gate (agent-written code) and GATE 2; no push |
 | `… --auto` | No stops at the gates; commit, push and pull request at the end |
 | `… --resume` | Resume a microtask paused in mentoring, after you wrote the code |
 
@@ -99,19 +102,20 @@ When a group contains `code` tasks, the pipeline always asks who writes the prod
 | Option | What happens |
 |---|---|
 | `Me (mentoring)` | **You** write the code. The pipeline shows only the signatures (no bodies), saves a resumable plan in `outcomes/microtask/<ID>-plan.md` and stops. Run `--resume` when you're done: it tests and reviews *your* code, gives review fixes in words (no code), then asks 4-5 Senior-level questions and waits for your answers. |
-| `Agent + Senior questions` | The agent writes the code and the pipeline **never stops for questions**. The questions on the agent's code are written to the group report, and shown all together at the very end (after the PR in `--auto`), to check you understand its choices. Answer whenever you like. |
-| `Agent` | The agent writes the code, no questions. |
+| `Agent + Senior questions` | The agent writes the code (with the design map, see II-D) and the pipeline **never stops for questions**. The questions on the agent's code are written to the group report, and shown all together at the very end (after the PR in `--auto`), to check you understand its choices. Answer whenever you like. |
+| `Agent` | The agent writes the code and shows the design map (II-D), no questions. |
 
 Tests are always written by the `test-runner` agent. The recommended option is chosen per group (mentoring for new features and architecture, agent for mechanical fixes) and can be tuned with a project rule in `.claude/rules/mentoring-mode.md`.
 
 ## Pull requests in `--auto`
 
-`--auto` approves both gates by itself (each decision is logged in the group report) and ends with `git push` + `gh pr create`, or a comment on the branch's open PR. It never pushes to `main`/`master`.
+`--auto` approves the gates by itself (each decision is logged in the group report) and ends with `git push` + `gh pr create`, or a comment on the branch's open PR. It never pushes to `main`/`master`.
 
 The PR body is a report for people who didn't follow the work:
 
 - **Behavior changes** first, if any (exceptions, return values, config, API).
-- One collapsible block per microtask: **Problem / Impact** (fixes) or **Goal** (features), **What we did** in plain words, and a table of every file touched, each linking to its diff.
+- One collapsible block per microtask: **Problem / Impact** (fixes) or **Goal** (features), **What we did** in plain words, a table of every file touched, each linking to its diff, and, for agent-written code, the **Design** table and class diagrams.
+- **Architecture**: one class diagram of the whole group, when the agent wrote two or more `code` microtasks.
 - **Verification**: warnings, tests and coverage, baseline → now.
 - **Notes**: follow-ups, suggested bump, how the gates went, CI warnings.
 
@@ -217,7 +221,7 @@ PR_REVIEW_FALLBACK_MODEL=gemini-3.5-flash-lite
 |---|---|---|---|
 | Skill | `init`, `plan`, `microtask` | — | — |
 | Agent | `solid-analyst` | opus | No (read-only) |
-| Agent | `implementer` | inherit | Production code only |
+| Agent | `implementer` | inherit | Production code only, plus its SOLID design map |
 | Agent | `test-runner` | sonnet | Tests only |
 | Agent | `reviewer` | sonnet | No (read-only) |
 | Agent | `memory-updater` | sonnet | Docs only |
