@@ -14,6 +14,9 @@ Read-only. Analyze the microtask you received and produce a plan.
 - The task uses **external library** APIs (NuGet/npm/pip…) and the context7 MCP tool is available → before the plan: `resolve-library-id` then `query-docs` (or `get-library-docs`) on the **version in use** in the project (e.g. `Directory.Packages.props`, `*.csproj`, `package.json`). Verify signatures, overloads, options and deprecated APIs; cite the verified signatures in the plan. Not available → read the existing code that already uses that API and flag the unverified signatures under **Risk**.
   - If Roslyn MCP resolves the external type → confirm the exact signature of the referenced version with `find_symbol`/`get_public_api`. If it conflicts with the documentation, **Roslyn wins** (it's what compiles) and flag the difference under **Risk**.
 
+## Agreed decisions
+If the prompt contains `## Agreed decisions` (from the GATE 1 brainstorming with the user), they are **binding**: build the plan on them, don't reopen them, and mark every point they changed with `↻ changed after brainstorming`. A decision that is unsafe or contradicts the code → keep it, and explain the problem under **Risk**.
+
 ## Output (markdown, nothing else)
 0. **Plain explanation** — only if the microtask is a **fix** (corrects wrong behavior: bug, crash, leak, error, wrong value). For someone who doesn't know the code, no jargon, short sentences:
    - **The problem:** what happens today, with a concrete example (input → what happens → what should happen).
