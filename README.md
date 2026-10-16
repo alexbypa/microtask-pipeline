@@ -15,6 +15,7 @@ AI can write code fast. The hard part is trusting it. microtask-pipeline makes t
 - 📏 **Never worse than before.** A full build and test run is taken *before* anything changes. New warnings, failing tests or lower coverage are findings, not surprises.
 - 🕵️ **Independent review.** The `reviewer` agent sees only the diff and the public API snapshot, never the plan or the author's intentions, so it judges the code as it is. It also suggests the semver bump.
 - 🚦 **You stay in control.** Two approval gates (the plan, then the diff and commit message), or `--auto` to run unattended and land a pull request.
+- 💬 **Agree on the plan before any code.** After the analysis the pipeline always asks whether you agree, or want to brainstorm it: you discuss alternatives, trade-offs and risks with Claude, the agreed decisions become binding for the plan and land in the PR. Even `--auto` waits here; after that it runs unattended.
 - 🛑 **It stops instead of guessing.** Red tests that weren't red at baseline, an out-of-plan change, a breaking change, unresolved 🔴 findings after two rounds: the pipeline stops and explains why, even in `--auto`.
 - 🏛️ **See the design, not just the diff.** When the agent writes the code, it maps every class and method it added, changed or moved: which file and layer, which SOLID principle decided the placement, which alternatives it discarded, plus Mermaid class diagrams of the architecture before and after. You approve the design before tests run (`--manual`), and it lands in the PR.
 - 📝 **PRs that humans actually read.** The PR body is a report: behavior changes first, then per task the problem, the impact, what was done in plain words, a table of every file touched with a link to its diff, and baseline → now numbers.
@@ -50,7 +51,8 @@ Optional: turn a roadmap into tasks first with `/microtask-pipeline:plan docs/ro
 flowchart LR
     Q[TODO.md queue] --> B[0. Baseline<br/>build + tests + coverage]
     B --> A[I. Analysis<br/>solid-analyst]
-    A --> G1{GATE 1<br/>approve plan}
+    A --> G1{GATE 1<br/>agree or brainstorm}
+    G1 -- "brainstorm" --> A
     G1 --> I[II. Implement<br/>agent or you]
     I --> DG{II-D. Design map<br/>approve placement}
     DG --> T[III. Tests<br/>test-runner]
@@ -67,7 +69,7 @@ flowchart LR
 | **Introduction** | skill | Before anything else: risk to the code (🟢/🟡/🔴 and why), a plain-language preview of each task, and the expected impact on the goals in your `CLAUDE.md` (e.g. NuGet downloads). |
 | **0. Baseline** | skill | Full (non-incremental) build and tests, warning count, pre-existing failures, coverage if configured. |
 | **I. Analysis** | `solid-analyst` | A plan with files, SOLID notes, risk, breaking changes and a public API snapshot. Fixes come with a plain "problem → why → how we fix it" explanation. |
-| **⏸ GATE 1** | you | Approve the plan, or ask for changes. |
+| **⏸ GATE 1** | you | Asked always, `--auto` included: **Agree**, **Brainstorm** (an open discussion with Claude on alternatives, trade-offs and risks; the agreed decisions go back to `solid-analyst` and the plan is redone), or **Change something**. The decisions land in the report and the PR. |
 | **II. Implementation** | `implementer` or you | Applies only the approved plan. In mentoring you write it. |
 | **II-D. Design map** | `implementer` → you | Agent-written code only. One entry per class/method, in the order of the changes: file, layer, SOLID principle, why it goes there, discarded alternatives; then Mermaid class diagrams before → after. Entries that differ from the plan are flagged. `--manual` waits for your approval before tests (ask for a different placement and it goes back to II); `--auto` shows it and carries on. |
 | **III. Tests** | `test-runner` | Writes and runs tests, full build, warnings vs baseline, changed-line coverage. |
@@ -90,7 +92,7 @@ flowchart LR
 | `/microtask-pipeline:microtask A1` | Run only microtask `A1` |
 | `/microtask-pipeline:microtask G1` | Run every open microtask of group `G1` |
 | `… --manual` | Stop at GATE 1, the design gate (agent-written code) and GATE 2; no push |
-| `… --auto` | No stops at the gates; commit, push and pull request at the end |
+| `… --auto` | No stops at the gates after you agree on the plan (GATE 1); commit, push and pull request at the end |
 | `… --resume` | Resume a microtask paused in mentoring, after you wrote the code |
 
 Without `--auto` or `--manual` the pipeline asks which mode to use.
@@ -109,7 +111,7 @@ Tests are always written by the `test-runner` agent. The recommended option is c
 
 ## Pull requests in `--auto`
 
-`--auto` approves the gates by itself (each decision is logged in the group report) and ends with `git push` + `gh pr create`, or a comment on the branch's open PR. It never pushes to `main`/`master`.
+After you agree on the plan at GATE 1, `--auto` approves the other gates by itself (each decision is logged in the group report) and ends with `git push` + `gh pr create`, or a comment on the branch's open PR. It never pushes to `main`/`master`.
 
 The PR body is a report for people who didn't follow the work:
 
@@ -117,6 +119,7 @@ The PR body is a report for people who didn't follow the work:
 - One collapsible block per microtask: **Problem / Impact** (fixes) or **Goal** (features), **What we did** in plain words, a table of every file touched, each linking to its diff, and, for agent-written code, the **Design** table and class diagrams.
 - **Architecture**: one class diagram of the whole group, when the agent wrote two or more `code` microtasks.
 - **Verification**: warnings, tests and coverage, baseline → now.
+- **Decisions from brainstorming**, when you discussed the plan at GATE 1.
 - **Notes**: follow-ups, suggested bump, how the gates went, CI warnings.
 
 **Your language, automatically.** Chat, questions and reports follow the language you write in, and the PR follows the language of the task text in your queue: tasks written in Italian get an Italian PR, tasks in Albanian an Albanian one. No setting needed. Requires the GitHub CLI (`gh`) authenticated.

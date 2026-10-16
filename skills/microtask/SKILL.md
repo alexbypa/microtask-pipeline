@@ -1,6 +1,6 @@
 ---
 name: microtask
-description: "Runs a group (or a single microtask) from the microtask queue (TODO.md) through a multi-agent pipeline: baseline → SOLID analysis → implementation (agent or you, in mentoring) → SOLID design map of the agent's code → tests → independent review → docs → group commit; in --auto mode also push and pull request."
+description: "Runs a group (or a single microtask) from the microtask queue (TODO.md) through a multi-agent pipeline: baseline → SOLID analysis (agree or brainstorm with you) → implementation (agent or you, in mentoring) → SOLID design map of the agent's code → tests → independent review → docs → group commit; in --auto mode also push and pull request."
 disable-model-invocation: true
 argument-hint: "[task ID (A29) or group (G0) — optional] [--auto | --manual] [--resume]"
 ---
@@ -94,7 +94,7 @@ Then **a single** `AskUserQuestion` call with these sequential questions:
 
 ## Modes
 - `--manual` → stops at the gates (⏸ GATE 1, ⏸ DESIGN GATE when the agent writes the code, ⏸ GATE 2) and waits for the user's approval. No push.
-- `--auto` → no waiting at the gates: decide yourself and log it in the report (`GATE n: auto-approved` / `DESIGN GATE: auto-approved` + reason). At the end of the group commit, push and pull request (step 4 of "End of group"). In mentoring the stops at II-user, review fixes and Step 3 remain; without the user's code and answers nothing moves on. With `Agent + Senior questions` Step 3 doesn't stop: the questions come at the end of the group. The mode is saved in the plan and still applies after `--resume`.
+- `--auto` → no waiting at the gates: decide yourself and log it in the report (`GATE n: auto-approved` / `DESIGN GATE: auto-approved` + reason). **Exception: GATE 1 for `code` and `analysis` tasks always waits** (agree or brainstorm, see step I); once the user agrees, `--auto` carries on unattended as before. At the end of the group commit, push and pull request (step 4 of "End of group"). In mentoring the stops at II-user, review fixes and Step 3 remain; without the user's code and answers nothing moves on. With `Agent + Senior questions` Step 3 doesn't stop: the questions come at the end of the group. The mode is saved in the plan and still applies after `--resume`.
 - Neither → the mode is the third question of the Introduction.
 
 **STOP even in `--auto`** (stop, explain, wait):
@@ -113,11 +113,11 @@ Claude Code permission prompts (e.g. `git push`, `gh pr create`) don't depend on
 | `code` | 0 → I → ⏸G1 → II → II-D (⏸ DESIGN GATE) → III → V → IV |
 | `code` with `Agent + Senior questions` | 0 → I → ⏸G1 → II → II-D (⏸ DESIGN GATE) → III → V → Step 3 (questions only, no stop) → IV |
 | `code` in mentoring | 0 → I → ⏸G1 → II-user (⏸ STOP) · `--resume` → III → V → ⏸ Step 3 → IV |
-| `analysis` | 0 → I → report in `outcomes/audits/<ID>.md` → IV |
+| `analysis` | 0 → I → ⏸G1 → report in `outcomes/audits/<ID>.md` → IV |
 | `docs` | I (impact only) → ⏸G1 → IV → doc-sync |
 | `content` | draft in `outcomes/content/<ID>.md` → ⏸G1 → IV |
 
-**Fast lane** (`code` only, if plan I says `Lane: fast`): II (only with the `Agent` implementer; in mentoring II-user remains), III and IV are run **by you** without subagents, with the same rules as the agents (full build, warning count, green tests, queue/CHANGELOG/Docs). At II-D you write the design log yourself, following `implementer`'s "Design log" with `Diagram: off` (placement entries only, no diagrams). Still agents: I (analysis) and V (independent review). At GATE 1 show the lane: the user can ask for the full one.
+**Fast lane** (`code` only, if plan I says `Lane: fast`): II (only with the `Agent` implementer; in mentoring II-user remains), III and IV are run **by you** without subagents, with the same rules as the agents (full build, warning count, green tests, queue/CHANGELOG/Docs). At II-D you write the design log yourself, following `implementer`'s "Design log" with `Diagram: off` (placement entries only, no diagrams). Still agents: I (analysis) and V (independent review). At GATE 1 show the lane: the user can ask for the full one. The GATE 1 agree/brainstorm question is asked in the fast lane too.
 
 ### 0. Baseline (once per group)
 Run a **full** `Build` (not incremental: .NET `--no-incremental`, other stacks clean first) + `Test`, or **`Coverage` if configured** (mandatory, fast lane included: never `Test` in its place). Record errors, **warning count**, **pre-existing** failures (not regressions) and, with `Coverage`, the **global production line coverage** (same rules as `test-runner`).
@@ -126,11 +126,20 @@ Coverage of test projects: every test project in the repo must be run by `Test` 
 
 ### I. Analysis → agent `microtask-pipeline:solid-analyst`
 Pass: microtask text, baseline, config. Receive: plan (plain explanation if a fix, files, SOLID, risk, breaking, public API snapshot, tests).
-**⏸ GATE 1:** if the microtask is a fix, show the "Plain explanation" **first** (problem → why → how we fix it), in the conversation language; then the plan. Wait for approval.
+**⏸ GATE 1 — agree or brainstorm** (`code` and `analysis` tasks; asked **always**, in `--auto`, in mentoring and in the fast lane too):
+1. Show the analysis in the conversation language: if the microtask is a fix, the "Plain explanation" **first** (problem → why → how we fix it); then the plan.
+2. Ask (`AskUserQuestion`): "Do you agree with this analysis?" → `Agree` / `Brainstorm` / `Change something` (free text). Labels translated into the conversation language.
+3. `Agree` → carry on; log `GATE 1: agreed by the user`.
+4. `Brainstorm` → an open discussion in chat, **led by you** (subagents can't converse with the user). One topic at a time: alternatives, trade-offs, risks, edge cases, SOLID, testability. For each open point propose 2-3 options with your recommendation and challenge the user's ideas like a senior colleague would. No code. Keep a running list of decisions. It ends when the user says they agree or asks to proceed: summarize the decisions, re-run `solid-analyst` with the original input plus `## Agreed decisions`, show the updated plan (changed points marked `↻ changed after brainstorming`) and ask step 2 again.
+5. `Change something` → re-run `solid-analyst` with the requested change as `## Agreed decisions`, show the updated plan, ask step 2 again.
+6. Brainstorming or changes happened → save the decisions and the discarded options in the group report (`## Brainstorming — <ID>`, conversation language) and, in mentoring, in `<ID>-plan.md`; they also feed the PR body.
+
+`docs` tasks keep the plain GATE 1: show the impact, wait for approval (`--auto`: auto-approve and log it).
+After GATE 1 nothing else changes: implementation, design map, tests, review and GATE 2 work as before.
 Only with `Social drafts: on`: right below the plan (also in `--auto` and in the fast lane), one line on its own, outside tables and lists:
 - `Nature: feature` → `Social draft: I'll create it at step IV (outcomes/social/<ID>.md)`
 - otherwise → `Task <ID> is not a feature, so no social post draft`
-In `--auto`: show the same text and carry on (except STOP cases). The plain explanation and the plan also feed the PR body.
+The plain explanation and the plan (after any brainstorming) also feed the PR body.
 
 ### II. Implementation → agent `microtask-pipeline:implementer`
 Pass: approved plan + `Build` command (+ `Diagram: off` in the fast lane). Report errors only: its build is incremental, warnings aren't reliable. Receive: summary + `## Design` (see II-D).
@@ -203,6 +212,7 @@ After doc-sync OK: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/doc-sync-gate.sh" --mark` 
 1. **Report** in `outcomes/microtask/<yyyy-MM-dd>-<Group>.md` (conversation language):
    - baseline → final (build, warnings, tests; with `Coverage`: global line coverage and changed lines covered N/M);
    - per microtask: what was done, gate decisions, deviations from the plan;
+   - `## Brainstorming — <ID>` sections from GATE 1 (decisions + discarded options), if any;
    - with the agent writing the code: `## Design — <ID>` sections from II-D (entries + diagrams, fix rounds included);
    - review findings: resolved / deferred;
    - follow-up tasks added to the queue;
@@ -251,6 +261,8 @@ A **report** that explains the work to someone who didn't follow it, in the **PR
 
 **What we did:** <2-3 plain sentences: how it works now and what people using the code see>
 
+**Decisions from brainstorming:** <only if GATE 1 had a brainstorm or changes: decision → why, one line each>
+
 | File | What changed | Why |
 |---|---|---|
 | [`<file name>`](https://github.com/<owner>/<repo>/pull/<n>/changes#diff-<sha256 of the path>) | <change in a few words> | <reason> |
@@ -278,7 +290,7 @@ A **report** that explains the work to someone who didn't follow it, in the **PR
 - Follow-up added: <ID> — <title>
 - Social draft: `outcomes/social/<ID>.md` (features only, with `Social drafts: on`)
 - Suggested bump: patch | minor | major (<reason>)
-- Gates: plan (GATE 1) and diff (GATE 2) approved by the user | auto-approved in `--auto` (<reason>)
+- Gates: plan (GATE 1) agreed by the user (after brainstorming: yes/no); diff (GATE 2) approved by the user | auto-approved in `--auto` (<reason>)
 - ⚠ CI not verified (only if the group touches CI/build)
 ```
 Rules:
