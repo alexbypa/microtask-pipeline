@@ -44,7 +44,7 @@ Table in the `Queue` file:
   - External output (code, README, CHANGELOG, commit message): `Language`.
   - **PR language** (body, comments, LLM review): the task language.
   - PR title = first line of the commit message, unchanged; commands, paths, type/method names and code stay unchanged.
-- Subagents run in the background: while you wait, end the turn with **one line** (current step), no intermediate summaries.
+- Subagents run in the background: while you wait, end the turn with **one line** (current step), no intermediate summaries. Exception: `solid-analyst` (step I) runs in the **foreground**, and GATE 1 starts only from its **final** result, never from an intermediate message or notification of the agent.
 - Pipeline marker: at startup `touch "$(git rev-parse --git-dir)/microtask-active"`; at every STOP (end of group or block) `rm -f` the same file. While the marker exists the doc-sync Stop hook stays quiet: doc-sync is already part of step IV.
 
 ## Selection
@@ -128,15 +128,18 @@ Coverage of test projects: every test project in the repo must be run by `Test` 
 Pass: microtask text, baseline, config. Receive: plan (plain explanation if a fix, files, SOLID, risk, breaking, public API snapshot, tests).
 **⏸ GATE 1 — agree or brainstorm** (`code` and `analysis` tasks; asked **always**, in `--auto`, in mentoring and in the fast lane too):
 1. Show the analysis in the conversation language: if the microtask is a fix, the "Plain explanation" **first** (problem → why → how we fix it); then the plan.
-2. Ask (`AskUserQuestion`): "Do you agree with this analysis?" → `Agree` / `Brainstorm` / `Change something` (free text). Labels translated into the conversation language.
-3. `Agree` → carry on; log `GATE 1: agreed by the user`.
-4. `Brainstorm` → an open discussion in chat, **led by you** (subagents can't converse with the user). One topic at a time: alternatives, trade-offs, risks, edge cases, SOLID, testability. For each open point propose 2-3 options with your recommendation and challenge the user's ideas like a senior colleague would. No code. Keep a running list of decisions. It ends when the user says they agree or asks to proceed: summarize the decisions, re-run `solid-analyst` with the original input plus `## Agreed decisions`, show the updated plan (changed points marked `↻ changed after brainstorming`) and ask step 2 again.
-5. `Change something` → re-run `solid-analyst` with the requested change as `## Agreed decisions`, show the updated plan, ask step 2 again.
+2. Ask in **plain text**, never with `AskUserQuestion` (a form can be confirmed by a stray keypress or while output is still streaming, so the user may "answer" without seeing it). Right after the plan:
+   - open decisions the analysis leaves to the user (e.g. visibility, a default value): one line each, options + your recommendation;
+   - then, as the **last line of the turn**, on its own: `⏸ GATE 1 — your turn: reply **ok** to agree, **brainstorm** to discuss it, or write what to change.` (translated into the conversation language);
+   - end the turn and wait for a message **typed by the user**. Nothing else counts as an answer: not a form or tool result, not an agent message or notification, not your own earlier text.
+3. `ok` (or an equivalent agreement: "agree", "sì", "va bene", "procedi") → carry on; open decisions the reply doesn't mention take your recommendation (log them); log `GATE 1: agreed by the user`. A reply that also asks for a change → step 5.
+4. `brainstorm` → an open discussion in chat, **led by you** (subagents can't converse with the user). One topic at a time: alternatives, trade-offs, risks, edge cases, SOLID, testability. For each open point propose 2-3 options with your recommendation and challenge the user's ideas like a senior colleague would. No code. Keep a running list of decisions. It ends when the user says they agree or asks to proceed: summarize the decisions, re-run `solid-analyst` with the original input plus `## Agreed decisions`, show the updated plan (changed points marked `↻ changed after brainstorming`) and ask step 2 again.
+5. Anything else (what to change) → re-run `solid-analyst` with the requested change as `## Agreed decisions`, show the updated plan, ask step 2 again.
 6. Brainstorming or changes happened → save the decisions and the discarded options in the group report (`## Brainstorming — <ID>`, conversation language) and, in mentoring, in `<ID>-plan.md`; they also feed the PR body.
 
 `docs` tasks keep the plain GATE 1: show the impact, wait for approval (`--auto`: auto-approve and log it).
 After GATE 1 nothing else changes: implementation, design map, tests, review and GATE 2 work as before.
-Only with `Social drafts: on`: right below the plan (also in `--auto` and in the fast lane), one line on its own, outside tables and lists:
+Only with `Social drafts: on`: right below the plan, before the `⏸ GATE 1` line (also in `--auto` and in the fast lane), one line on its own, outside tables and lists:
 - `Nature: feature` → `Social draft: I'll create it at step IV (outcomes/social/<ID>.md)`
 - otherwise → `Task <ID> is not a feature, so no social post draft`
 The plain explanation and the plan (after any brainstorming) also feed the PR body.
